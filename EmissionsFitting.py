@@ -7,6 +7,8 @@ import numpy as np
 from numpy.polynomial import polynomial as P
 from scipy import interpolate
 from scipy.signal import find_peaks
+from scipy.signal import lfilter
+from scipy.optimize import linprog
 import matplotlib.pyplot as plt
 
 ###########################
@@ -305,7 +307,7 @@ def smooth_signal(a, wave_seg):
 
 # The main meat and potatoes.
 
-def fit_spectra(filename, Range, Base, References, reduce_fit):
+def fit_spectra(filename, Range, Base, References, reduce_fit, smooth, plot):
 
     Path = 'spectra/'
     Path_templates = Path + '/templates/'
@@ -332,6 +334,13 @@ def fit_spectra(filename, Range, Base, References, reduce_fit):
     wave_seg, abso_seg = getRange(wave_ref, func(wave_ref), Range)
 
     y_obs = (-abso_seg)-min(-abso_seg)
+
+    if smooth:
+
+        n = 20
+        b = [1.0 / n] * n
+        a = 1
+        y_obs = lfilter(b, a, y_obs)
     
     # fun maths fitting time!
 
@@ -348,31 +357,45 @@ def fit_spectra(filename, Range, Base, References, reduce_fit):
 
 
     # new func to remove all compounds except for CO2, H2O, CO, CH4
-    if reduce_fit == True:
+    if reduce_fit:
         a, Compounds_Present = reduce_A_matrix_bigSpeciesOnly(a, Compounds_Present)
 
     aT = np.transpose(a)
     aT_a = aT @ a
     inv = np.linalg.inv(aT_a)
 
-    x = np.linalg.solve(inv, aT @ y_obs)
+    #x = np.linalg.solve(inv, aT @ y_obs)
+
+    #Above is simple soln. Below is attempt to generate an all-positive x.
+    #####
+    bounds = [(0, None)] * inv.shape[1]
+    c = np.zeros(inv.shape[1])
+
+    result = linprog(c, A_ub=-inv, b_ub=-aT @ y_obs, bounds=bounds, method='highs')
+    if result.success:
+        x = result.x
+    else:
+        x = np.linalg.solve(inv, aT @ y_obs)
+    #####
 
     e = a @ x - y_obs
     rmse = np.sqrt(np.mean(e * e))
 
     # Plots a simple bar chart of the derived weights
 
-    plt.figure()
-    plt.bar(Compounds_Present, x)
-    plt.xticks(rotation=90)
-    plt.yscale('log')
-    plt.show()
+    if plot:
+        plt.figure()
+        plt.bar(Compounds_Present, x)
+        plt.xticks(rotation=90)
+        plt.yscale('log')
+        plt.show()
 
     # Error plot (I doubt this is correct)
 
-    plt.plot(e, "o", color='purple')
-    plt.axhspan(-1,1,fc="0.8", alpha=0.5)
-    plt.show()
+    if plot:
+        plt.plot(e, "o", color='purple')
+        plt.axhspan(-1,1,fc="0.8", alpha=0.5)
+        plt.show()
 
     C_obs_inv = np.diag(np.ones_like(y_obs))
 
@@ -384,26 +407,26 @@ def fit_spectra(filename, Range, Base, References, reduce_fit):
     rmse_opt = np.sqrt(np.mean(e_new * e_new))
     uncertainty = np.sqrt(cov.diagonal())
 
-    # Prints uncertainties
-
-    print("Inferred weights:", x_opt)
-    print("Uncertainity:",uncertainty)
-    print("RMSE:",rmse_opt)
-
     cond = np.linalg.cond(aT @ C_obs_inv @ a)
-    
-    print("Conditioning Number:", cond)
 
-    empt = np.zeros(len(aT[0]))
+    # Prints uncertainties
+    if plot:
 
-    for i in range(len(aT)):
-        empt += aT[i] * x_opt[i]
+        print("Inferred weights:", x_opt)
+        print("Uncertainity:",uncertainty)
+        print("RMSE:",rmse_opt)
+        print("Conditioning Number:", cond)
 
-    # Plots a 'Observed' vs 'Fit' diagram
+        empt = np.zeros(len(aT[0]))
 
-    plt.plot(wave_seg, empt, label='Fit')
-    plt.plot(wave_seg, y_obs, label='Observed')
-    plt.legend()
-    plt.show()
+        for i in range(len(aT)):
+            empt += aT[i] * x_opt[i]
 
-    return x_opt, e_new, rmse_opt, uncertainty, cond
+        # Plots a 'Observed' vs 'Fit' diagram
+
+        plt.plot(wave_seg, empt, label='Fit')
+        plt.plot(wave_seg, y_obs, label='Observed')
+        plt.legend()
+        plt.show()
+
+    return x_opt, e_new, rmse_opt, uncertainty, cond, Compounds_Present
