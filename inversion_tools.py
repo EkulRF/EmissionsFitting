@@ -160,3 +160,49 @@ def remove_background(
     # Flip spectrum.
     residual_spectra = -residual_spectra - residual_spectra.min(axis=0)
     return passer, residual_spectra
+
+
+def temporally_regularised_inversion(
+    reference_spectra: np.ndarray,
+    residual_spectra: np.ndarray,
+    lambda_: float,
+    post_cov: bool = True,
+    do_spilu: bool = True,
+):
+    """Temporally regularised inversion using selected bassis functions.
+
+    Args:
+        absorption_spectra (np.ndarray): The absorption spectra, shape (Ns, Nl)
+        residual_spectra (np.ndarray): The residuals of the transmiatted spectra,
+            shape (Nt, Nl)
+        lambda_ (float): The amount of regularisation. 0.005 seems to work?
+        post_cov (boolean, optional): Return inverse posterior covariance matrix.
+            Defaults to True.
+        do_spilu (boolean, optional): Solve the system using and ILU factorisation.
+            Seems faster and more memory efficient, with an error around 0.5-1%
+
+    Returns:
+        Maximum a poseteriori estimate, and variance. Optionally, also
+        the posterior inverse covariance matrix.
+    """
+    Ns, Nl = reference_spectra.shape
+    Nt = residual_spectra.shape[0]
+    assert Ns != residual_spectra.shape[1], "Wrong spectral sampling!!"
+    # Create the "hat" matrix
+    A_mat = build_A_matrix(reference_spectra, Ns, Nl, Nt)
+    # Regulariser
+    D_mat = sp.lil_matrix(sp.kron(sp.eye(4), create_smoother(567)))
+    # Squeeze observations
+    y = residual_spectra.flatten()
+    # Solve
+    C = sp.csc_array(A_mat.T @ A_mat + lambda_ * D_mat)
+    cobj = spl.spilu(C)
+    x_sol = cobj.solve(A_mat.T @ y) if do_spilu else spl.spsolve(C, A_mat.T @ y)
+
+    s = np.zeros(Ns * Nt)
+    t = np.zeros(Ns * Nt)
+    for i in range(Ns * Nt):
+        a = t * 1.0
+        a[i] = 1.0
+        s[i] = cobj.solve(a)[i]
+    return (x_sol, s, C) if post_cov else (x_sol, s)
