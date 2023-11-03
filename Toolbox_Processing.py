@@ -6,6 +6,7 @@ import pickle as pkl
 import scipy
 import scipy.sparse as sp
 import scipy.sparse.linalg as spl
+from scipy.signal import convolve
 
 from radis import calc_spectrum
 from radis import load_spec
@@ -133,12 +134,16 @@ def remove_background_new(S, W):
     
     return np.array(absorbance_spectra)
 
-def getReferenceMatrix(Compounds, T, P, W_obs):
+def getReferenceMatrix(Compounds, T, P, W_obs, sigma):
     
     output = []
     output_coef = []
+
+    norm_constant = 1 / (np.sqrt(2 * np.pi) * sigma)
     
     for c in Compounds:
+
+        plt.figure()
         
         bank = Compounds[c]['Source']
         
@@ -154,9 +159,8 @@ def getReferenceMatrix(Compounds, T, P, W_obs):
                           isotope='1',
                           pressure=P,   # bar
                           Tgas=T,           # K
-                          mole_fraction=10**(-4),
-                          path_length=500,      # cm
-                          databank=bank,  # or 'hitemp', 'geisa', 'exomol'
+                          mole_fraction=10**(-6),
+                          path_length=500      # cm
                           )
             except:
                 print("BAD", c)
@@ -169,13 +173,24 @@ def getReferenceMatrix(Compounds, T, P, W_obs):
             s.resample(W_obs[iloc:jloc], energy_threshold=2)
             
             w, A = s.get('absorbance', wunit='cm-1')
+
+            if sigma != 0:
+                broadened_A = convolve(A, norm_constant * np.exp(-(w-np.median(w))**2 / (2 * sigma**2)), mode='same')
+                broadened_A *= np.max(A)/np.max(broadened_A)
+                tmp[iloc:jloc] = broadened_A
+                plt.plot(w,broadened_A)
+            else:
+                tmp[iloc:jloc] = A
+
             w_coef, A_coef = s.get('abscoeff', wunit='cm-1', Iunit='cm-1')
 
-            tmp[iloc:jloc] = A
             tmp_coef[iloc:jloc] = A_coef
             
         output.append(tmp)
         output_coef.append(tmp_coef)
+
+        plt.show()
+        plt.savefig(str(c)+'.jpg')
 
     ref_mat = np.array(output)
     ref_mat_coef = np.array(output_coef)
@@ -316,3 +331,23 @@ def find_largest_peak_in_range(arr, index):
                 max_peak = i
 
     return max_peak
+
+def squeeze_Residuals(y_model, y, Nl):
+
+    y_model_wv_squeezed = np.array(y_model-y).reshape(-1, Nl)
+
+    y_model_time_squeezed = extract_nth_element_from_each_subarray(y_model_wv_squeezed)
+
+    return y_model_wv_squeezed, y_model_time_squeezed
+
+def extract_nth_element_from_each_subarray(arr):
+    # Calculate the maximum length of sub-arrays in the original array
+    max_length = max(len(subarray) for subarray in arr)
+
+    # Create an empty result array filled with NaN values
+    result = np.full((max_length, len(arr)), np.nan)
+
+    for i, subarray in enumerate(arr):
+        result[:len(subarray), i] = subarray
+
+    return result

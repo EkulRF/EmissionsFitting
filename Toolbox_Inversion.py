@@ -54,22 +54,23 @@ def temporally_regularised_inversion(
     y = residual_spectra.flatten()
     # Solve
     C = sp.csc_array(A_mat.T @ A_mat + lambda_ * D_mat)
+    
+
+    c_inv = np.linalg.inv(C.toarray())
+
+    sigma = c_inv.diagonal()
+
     cobj = spl.spilu(C)
     x_sol = cobj.solve(A_mat.T @ y) if do_spilu else spl.spsolve(C, A_mat.T @ y)
 
-    s = np.zeros(Ns * Nt)
-    t = np.zeros(Ns * Nt)
-    for i in range(Ns * Nt):
-        a = t * 1.0
-        a[i] = 1.0
-        s[i] = cobj.solve(a)[i]
 
     #s = np.sqrt(s.diagonal())
     #print("Plotting covariance")
     #plt.imshow(s, interpolation="nearest", cmap=plt.get_cmap("RdBu"))
     #plt.savefig('Cov.jpg')
 
-    return (x_sol, s, C) if post_cov else (x_sol, s)
+
+    return (x_sol, sigma, C) if post_cov else (x_sol, sigma)
 
 def inversion_residual(ref_spec, obs_spec, x_sol):
 
@@ -83,8 +84,6 @@ def inversion_residual(ref_spec, obs_spec, x_sol):
     for i, r in enumerate(ref_spec):
         for j in range(Nt):
             y_model[j*Nl:(j+1)*Nl] += r * x_sol[i*Nt:(i+1)*Nt][j]
-
-
 
     return y_model, y
 
@@ -108,7 +107,7 @@ def lasso_inversion(
 
     rand_timesteps = [random.randint(0, Nt-1) for _ in range(int(round(Nt/10)))]
 
-    Cross_Val_Score = [[] for _ in range(2)]
+    Cross_Val_Score = [[] for _ in range(3)]
     R2, RMSE = [], []
 
     for i in rand_timesteps:
@@ -122,6 +121,7 @@ def lasso_inversion(
 
         Cross_Val_Score[0].append(scores.mean())
         Cross_Val_Score[1].append(scores.std())
+        Cross_Val_Score[2].append(scores)
 
 
         y_pred = lasso.predict(A_dense)

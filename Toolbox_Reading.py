@@ -112,7 +112,7 @@ def read_data(
     )
     return spectra, absorption_spectra, species_names, wv
 
-def generateData(Compounds, path):
+def generateData(Compounds, path, sigma):
 
     bounds = {
     "CO2": (6250, 6600),
@@ -130,7 +130,8 @@ def generateData(Compounds, path):
 
     T, P = 300, 1.01
 
-    storage_mtx, storage_coef_mtx = getReferenceMatrix(Compounds, T, P, wv_obs)
+    storage_mtx, storage_coef_mtx = getReferenceMatrix(Compounds, T, P, wv_obs, sigma)
+    print("ref generated")
 
     for i in range(len(storage_mtx)):
         for j in range(len(storage_mtx[i])):
@@ -139,10 +140,9 @@ def generateData(Compounds, path):
 
     S = np.array([s[~np.all(storage_mtx == 0, axis=0)] for s in spectra_obs])
 
-    #S = np.array([-np.log(np.abs(x)) for x in S])
     W = wv_obs[~np.all(storage_mtx == 0, axis=0)]
-    #residual_spectra = remove_background(S, {}, W)
-    np.save('W.npy', W)
+
+    np.save('EmFit_private/results/W.npy', W)
 
 
     residual_spectra = remove_background(S, W)
@@ -150,7 +150,7 @@ def generateData(Compounds, path):
     reference_spectra_coef = storage_coef_mtx[:, ~np.all(storage_mtx == 0, axis=0)]
     reference_spectra = storage_mtx[:, ~np.all(storage_mtx == 0, axis=0)]
 
-    Compounds = getPeaks(Compounds, W, reference_spectra, reference_spectra_coef)
+    #Compounds = getPeaks(Compounds, W, reference_spectra, reference_spectra_coef)
 
     deselect = np.full(len(W), True)
 

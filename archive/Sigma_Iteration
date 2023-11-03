@@ -1,0 +1,120 @@
+import numpy as np
+import matplotlib
+import matplotlib.pyplot as plt
+import pickle as pkl
+import scipy
+
+from radis import calc_spectrum
+from radis import load_spec
+from radis.test.utils import getTestFile
+from radis import Spectrum
+
+from Toolbox_Processing import *
+from Toolbox_Reading import *
+from Toolbox_Inversion import *
+
+
+path = "EmFit_private/spectra/test_series"
+
+Compounds = getCompounds('EmFit_private/Compounds.pickle')
+
+remove = ['SiH', 'CaF', 'SiS', 'BeH', 'HF', 'HCl', 'NH', 'SiH2', 'AlF', 'SH', 'CH', 'AlH', 'TiH', 'CaH', 'LiF', 'MgH', 'ClO']
+
+for r in remove:
+    Compounds.pop(r)
+
+
+broadening_sigma = 1
+
+for kk in [0.01,0.02,0.03,0.04,0.05,0.06,0.07,0.08,0.09,1]:
+
+    ref_spec, obs_spec, Compounds = generateData(Compounds, path, kk)
+
+    #Lasso Inversion - removes compounds not present
+    ref_spec, Compounds, A, Lasso_Evaluation = lasso_inversion(ref_spec, obs_spec, Compounds)
+    # Should have option to say whether we want lasso regression stats???
+
+    #Tikhonov Regularisation
+    x_sol, sigma, C = temporally_regularised_inversion(ref_spec, obs_spec, 0.00000)
+
+    #sigma = np.sqrt(sigma.diagonal())
+
+    ##### How well does it fit??? Residual shit here!!!!!
+
+    np.save('sol.npy', x_sol)
+    np.save('sig.npy', sigma)
+    np.save('comp.npy', Compounds)
+    np.save('ref.npy', ref_spec)
+    np.save('obs.npy', obs_spec)
+    np.save('C.npy', C)
+
+
+    y_model, y = inversion_residual(ref_spec, obs_spec, x_sol)
+
+    np.save(str(kk)+'_y.npy', y)
+    np.save(str(kk)+'_y_model.npy', y_model)
+
+    print("Happy Days!!", kk)
+
+    # plt.scatter(np.arange(len(y)),y_model - y, s=0.001)
+    # plt.ylabel('Residual')
+    # plt.savefig('resid.jpg')
+    # plt.show()
+
+    # y_model_squeezed = np.array(y_model-y).reshape(-1, Nl)
+
+    # plt.figure()
+    # for i in y_model_squeezed:
+    #     #plt.scatter(W, i, s=0.001)
+    #     plt.scatter(np.arange(len(i)), i, s=0.001)
+    # plt.ylabel('Residual (Predicted - Real)')
+    # plt.xlabel('Wavenumber / cm-1')
+    # plt.savefig('resid_wv.jpg')
+
+    # def extract_nth_element_from_each_subarray(arr):
+    #     # Calculate the maximum length of sub-arrays in the original array
+    #     max_length = max(len(subarray) for subarray in arr)
+
+    #     # Create an empty result array filled with NaN values
+    #     result = np.full((max_length, len(arr)), np.nan)
+
+    #     for i, subarray in enumerate(arr):
+    #         result[:len(subarray), i] = subarray
+
+    #     return result
+
+
+    # print("starting")
+    # y_model_wv_squeezed = extract_nth_element_from_each_subarray(y_model_squeezed)
+    # print("ending")
+
+
+    # plt.figure()
+    # for i in y_model_wv_squeezed:
+    #     plt.scatter(np.arange(len(i)),i, s=0.001)
+    # plt.ylabel('Residual (Predicted - Real)')
+    # plt.xlabel('Time Step')
+    # plt.savefig('resid_time.jpg')
+
+
+
+    # # Converting estimated parameters to PPM concentrations
+    # #x_sol, sigma = convert2PPM_new_new(Compounds, x_sol, sigma, obs_spec.shape[0], 500)
+
+    # ### make below into func
+    # compound_list = list(Compounds.keys())
+    # Nt = obs_spec.shape[0]
+
+    # num_rows = len(compound_list) // 2  # Calculate the number of rows needed
+
+    # fig, axs = plt.subplots(num_rows+1, 2, figsize=(10, 6))
+
+    # for i, spc in enumerate(compound_list):
+    #     row, col = divmod(i, 2)
+    #     axs[row,col].plot(np.arange(Nt), x_sol[i*Nt:(i+1)*Nt], color = 'red')
+    #     axs[row,col].fill_between(np.arange(Nt), x_sol[i*Nt:(i+1)*Nt] - 0.5*np.sqrt(sigma[i*Nt:(i+1)*Nt]),
+    #                             x_sol[i*Nt:(i+1)*Nt] + 0.5*np.sqrt(sigma[i*Nt:(i+1)*Nt]),
+    #                             color= "0.8")
+    #     axs[row, col].set_title(spc)
+
+    # plt.savefig('result.jpg')

@@ -1,80 +1,58 @@
 import numpy as np
-import matplotlib
-import matplotlib.pyplot as plt
-import pickle as pkl
-import scipy
-
-from radis import calc_spectrum
-from radis import load_spec
-from radis.test.utils import getTestFile
-from radis import Spectrum
+# import matplotlib
+# import matplotlib.pyplot as plt
+# import pickle as pkl
+# import scipy
 
 from Toolbox_Processing import *
 from Toolbox_Reading import *
 from Toolbox_Inversion import *
+from Toolbox_Display import *
 
 
 path = "EmFit_private/spectra/test_series"
 
 Compounds = getCompounds('EmFit_private/Compounds.pickle')
 
-remove = ['SiH', 'CaF', 'SiS', 'BeH', 'HF', 'HCl', 'NH', 'SiH2', 'AlF', 'SH', 'CH', 'AlH', 'TiH', 'CaH', 'LiF', 'MgH', 'ClO']
+remove = ['SiH', 'CaF', 'SiS', 'BeH', 'HF',  'NH', 'SiH2', 'AlF', 'SH', 'CH', 'AlH', 'TiH', 'CaH', 'LiF', 'MgH', 'ClO']
+
+remove.append('H2S')
+remove.append('CH3Br')
 
 for r in remove:
     Compounds.pop(r)
 
-ref_spec, obs_spec, Compounds = generateData(Compounds, path)
+broadening_constant = 0.4
+regularisation_constant = 10**(-3)
+
+ref_spec, obs_spec, Compounds = generateData(Compounds, path, broadening_constant)
 
 #Lasso Inversion - removes compounds not present
 ref_spec, Compounds, A, Lasso_Evaluation = lasso_inversion(ref_spec, obs_spec, Compounds)
 # Should have option to say whether we want lasso regression stats???
 
 #Tikhonov Regularisation
-x_sol, sigma, C = temporally_regularised_inversion(ref_spec, obs_spec, 0.00000)
+x_sol, sigma, C = temporally_regularised_inversion(ref_spec, obs_spec, regularisation_constant)
 
-#sigma = np.sqrt(sigma.diagonal())
+y_model, y = inversion_residual(ref_spec, obs_spec, x_sol)
+y_model_wv_squeezed, y_model_time_squeezed = squeeze_Residuals(y_model, y, ref_spec.shape[1])
 
-##### How well does it fit??? Residual shit here!!!!!
-
-np.save('sol.npy', x_sol)
-np.save('sig.npy', sigma)
-np.save('comp.npy', Compounds)
-np.save('ref.npy', ref_spec)
-np.save('obs.npy', obs_spec)
-np.save('C.npy', C)
-
-# Converting estimated parameters to PPM concentrations
-x_sol, sigma = convert2PPM_new_new(Compounds, x_sol, sigma, obs_spec.shape[0], 500)
+PlotTimeSeries('PPM_TimeSeries', list(Compounds.keys()), x_sol, np.sqrt(sigma), obs_spec.shape[0])
+PlotER_TimeSeries('ER_TimeSeries', list(Compounds.keys()), x_sol, np.sqrt(sigma), obs_spec.shape[0], 'CO2')
+PlotResiduals(y_model_wv_squeezed, y_model_time_squeezed)
 
 
 
 
+np.save('EmFit_private/results/sol.npy', x_sol)
+np.save('EmFit_private/results/sig.npy', sigma)
+np.save('EmFit_private/results/comp.npy', Compounds)
+np.save('EmFit_private/results/ref.npy', ref_spec)
+np.save('EmFit_private/results/obs.npy', obs_spec)
+with open('EmFit_private/results/C.pickle', 'wb') as handle:
+    pkl.dump(C, handle, protocol=pkl.HIGHEST_PROTOCOL)
+np.save('EmFit_private/results/y_model_wv_squeezed.npy', y_model_wv_squeezed)
+np.save('EmFit_private/results/y_model_time_squeezed.npy', y_model_time_squeezed)
+np.save('EmFit_private/results/lasso_evaluation.npy', Lasso_Evaluation)
 
-
-
-
-
-
-# np.save('sol.npy', x_sol)
-# np.save('sig.npy', sigma)
-# np.save('comp.npy', Compounds)
-# np.save('ref.npy', ref_spec)
-# np.save('obs.npy', obs_spec)
-
-### make below into func
-compound_list = list(Compounds.keys())
-Nt = obs_spec.shape[0]
-
-num_rows = len(compound_list) // 2  # Calculate the number of rows needed
-
-fig, axs = plt.subplots(num_rows+1, 2, figsize=(10, 6))
-
-for i, spc in enumerate(compound_list):
-    row, col = divmod(i, 2)
-    axs[row,col].plot(np.arange(Nt), x_sol[i*Nt:(i+1)*Nt], color = 'red')
-    axs[row,col].fill_between(np.arange(Nt), x_sol[i*Nt:(i+1)*Nt] - 0.5*np.sqrt(sigma[i*Nt:(i+1)*Nt]),
-                            x_sol[i*Nt:(i+1)*Nt] + 0.5*np.sqrt(sigma[i*Nt:(i+1)*Nt]),
-                            color= "0.8")
-    axs[row, col].set_title(spc)
-
-plt.savefig('result.jpg')
+print(Lasso_Evaluation)
