@@ -28,7 +28,7 @@ regularisation_constant = 10**(-3)
 ref_spec, obs_spec, Compounds = generateData(Compounds, path, broadening_constant)
 
 # Perform Lasso inversion and remove compounds not present
-ref_spec, Compounds, A, Lasso_Evaluation = lasso_inversion(ref_spec, obs_spec, Compounds)
+ref_spec, Compounds, Lasso_Evaluation = lasso_inversion(ref_spec, obs_spec, Compounds)
 
 # Perform Tikhonov regularization
 x_sol, sigma, C = temporally_regularised_inversion(ref_spec, obs_spec, regularisation_constant)
@@ -59,6 +59,5 @@ PlotER_TimeSeries('ER_TimeSeries', list(Compounds.keys()), x_sol, np.sqrt(sigma)
 
 # Plot residuals both in time and across wavenumbers
 PlotResiduals(y_model_wv_squeezed, y_model_time_squeezed)
-
 
 print(Lasso_Evaluation)

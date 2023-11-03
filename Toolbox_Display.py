@@ -125,10 +125,11 @@ def PlotER_TimeSeries(name: str, compound_list: list, x_sol: np.ndarray, x_err: 
 
         row, col = divmod(i, 2)
         axs[row,col].plot(np.arange(Nt), ER, color = 'red')
-        axs[row,col].fill_between(np.arange(Nt), np.array(ER) - 0.5*np.array(ER_se),
-                                 np.array(ER) + 0.5*np.array(ER_se),
-                                 color= "0.8")
-        axs[row, col].set_title(spc, loc='right')
+        #Should fix uncertainty calculations (too big atm- mistake in calc.)
+        # axs[row,col].fill_between(np.arange(Nt), np.array(ER) - 0.5*np.array(ER_se),
+        #                          np.array(ER) + 0.5*np.array(ER_se),
+        #                          color= "0.8")
+        # axs[row, col].set_title(spc, loc='right')
         axs[row, col].grid()
 
     plt.savefig('EmFit_private/plot/' + name + '.jpg')

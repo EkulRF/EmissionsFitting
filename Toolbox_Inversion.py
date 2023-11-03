@@ -49,7 +49,6 @@ def temporally_regularised_inversion(
     assert Ns != residual_spectra.shape[1], "Wrong spectral sampling!!"
     # Create the "hat" matrix
     A_mat = build_A_matrix(reference_spectra, Ns, Nl, Nt)
-    #print(np.linalg.cond(A_mat.todense()))
     # Regulariser
     D_mat = sp.lil_matrix(sp.kron(sp.eye(Ns), create_smoother(Nt)))
     # Squeeze observations
@@ -59,18 +58,18 @@ def temporally_regularised_inversion(
     
 
     c_inv = np.linalg.inv(C.toarray())
+    std_devs = np.sqrt(np.diag(c_inv))
+
+    # Use broadcasting to calculate the correlation matrix
+    inv_corr = c_inv/ np.outer(std_devs, std_devs)
+    plt.imshow(np.log10(((inv_corr+1)/2)+ 1e-10),cmap='BuGn')
+    plt.savefig('EmFit_private/plot/Correlation_Matrix.jpg')
+    plt.close()
 
     sigma = c_inv.diagonal()
 
     cobj = spl.spilu(C)
     x_sol = cobj.solve(A_mat.T @ y) if do_spilu else spl.spsolve(C, A_mat.T @ y)
-
-
-    #s = np.sqrt(s.diagonal())
-    #print("Plotting covariance")
-    #plt.imshow(s, interpolation="nearest", cmap=plt.get_cmap("RdBu"))
-    #plt.savefig('Cov.jpg')
-
 
     return (x_sol, sigma, C) if post_cov else (x_sol, sigma)
 
@@ -192,7 +191,4 @@ def lasso_inversion(
     # Get the dimensions of the updated reference spectra
     (Ns, Nl), Nt = reference_spectra.shape, residual_spectra.shape[0]
 
-    # Rebuild the reference A matrix based on the updated reference spectra
-    A = build_A_matrix(reference_spectra, Ns, Nl, 1)
-
-    return reference_spectra, new_Compounds, A, Lasso_Evaluation
+    return reference_spectra, new_Compounds,  Lasso_Evaluation
