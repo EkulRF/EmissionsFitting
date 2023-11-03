@@ -48,20 +48,15 @@ def interpolate_spectrum(
     return np.interp(wv_out, wv, y)
 
 def read_data(
-    selected_spectra,
     spectral_data,
-    template_data,
     cutoff= 800,
 ):
-    """Read spectra and template (e.g. absorption spectra) data.
+    """Read spectral data.
 
     Args:
-        selected_spectra (list): List of species to read in
         spectral_data (str | Path): Location of spectral files. Assumed all
             prn files in folder should be read and ordered according to file
             name.
-        template_data (str | Path): Location of the spectral template
-            absorption files. prn extension (as above)
         cutoff (int, optional): Wavelength cut-off. Defaults to 800.
 
     Returns:
@@ -69,98 +64,87 @@ def read_data(
     """
     if isinstance(spectral_data, str):
         spectral_data = Path(spectral_data)
-    if isinstance(template_data, str):
-        template_data = Path(template_data)
+
 
     # Next bit loads up the different recorded spectra
-    # over some ~ 550 time steps or so.
-
     files = sorted([f for f in spectral_data.glob("*prn")])
-    print(spectral_data)
-    print(len([f for f in spectral_data.glob("*prn")]))
-    print(files)
-    # Let's read the wavelengths for one spectrum
+    # Read the wavenumbers for the observations.
     # All files have same spectral range
     wv = np.loadtxt(files[0], usecols=[0])
     # Now read in all the actual spectra
     spectra = np.array([read_spectrum(f) for f in tqdm(files)])
 
-    # Luke removes the first 800 samples
-    # Dunno why, but I do the same
 
+    # Remove all wavenumbers before the cutoff. (Useful as the MATRIX spits out jibberish for the first ~800 entries or so)
     wvc = wv[wv > cutoff]
     spectra = spectra[:, wv > cutoff]
     wv = wvc * 1
 
-    # Now, let's go and read in the absorption
-    # characteristics of our target species
+    return spectra, wv
 
-    files = sorted(
-        [
-            f
-            for f in template_data.glob("*prn")
-            if f.name.split("_")[1] in selected_spectra
-        ]
-    )
-    # Again, read in the wavelenth columns
-    wvc = np.loadtxt(files[0], usecols=[0])
-    # Retrieve species names from filename
-    species_names = [f.name.split("_")[1] for f in files]
-    # Read & interpolate the the actual spectra
-    absorption_spectra = np.array(
-        [interpolate_spectrum(wvc, read_spectrum(f), wv) for f in tqdm(files)]
-    )
-    return spectra, absorption_spectra, species_names, wv
+def generateData(Compounds: dict, path: str, sigma: float):
+    """
+    Generate data from the Compounds dictionary, path, and broadening constant.
 
-def generateData(Compounds, path, sigma):
+    Args:
+        Compounds (dict): A dictionary containing information about chemical species.
+        path (str): A string representing the path variable.
+        sigma (float): The broadening constant.
 
-    bounds = {
-    "CO2": (6250, 6600),
-    "CH4": [9100, 9700],
-    "H2O": [5500, 5900],
-    "CO": [2500, 4000],
-}
-    selected_spectra = list(bounds.keys())
+    Returns:
+        tuple: A tuple containing the reference spectra matrix, residual spectra, and an updated Compounds dictionary.
 
-    (spectra_obs, absorption_spectra, species_names, wv_obs) = read_data(
-        selected_spectra,
-        path, # Location of the series we want to invert.
-        "EmFit_private/spectra/templates/" # Location of the individual species "template" absorption
-    )
+    This function generates reference data based on the 'Compounds' dictionary and broadening constant 'sigma, the residual spectra
+    based on files found in the specified 'path'. It uses various functions to read data, generate a reference
+    matrix, and process the spectra. The resulting data is returned as a tuple, and the 'Compounds'
+    dictionary may contain additional information about the generated data.
+
+    """
+    # Read observed spectra and wavenumber array from the specified path
+    spectra_obs, wv_obs = read_data(path)
 
     T, P = 300, 1.01
 
-    storage_mtx, storage_coef_mtx = getReferenceMatrix(Compounds, T, P, wv_obs, sigma)
-    print("ref generated")
+    # Generate the reference matrix using the 'getReferenceMatrix' function
+    storage_mtx = getReferenceMatrix(Compounds, T, P, wv_obs, sigma)
+    print("Reference Matrix Generated!!")
 
+    # Replace NaN values in the reference matrix with zeros
     for i in range(len(storage_mtx)):
         for j in range(len(storage_mtx[i])):
-            if isNaN(storage_mtx[i][j]):
+            if np.isnan(storage_mtx[i][j]):
                 storage_mtx[i][j] = 0
 
+    # Process observed spectra and wavenumber array to match the reference matrix
     S = np.array([s[~np.all(storage_mtx == 0, axis=0)] for s in spectra_obs])
-
     W = wv_obs[~np.all(storage_mtx == 0, axis=0)]
-
     np.save('EmFit_private/results/W.npy', W)
 
-
+    # Remove background from the processed spectra
     residual_spectra = remove_background(S, W)
-
-    reference_spectra_coef = storage_coef_mtx[:, ~np.all(storage_mtx == 0, axis=0)]
     reference_spectra = storage_mtx[:, ~np.all(storage_mtx == 0, axis=0)]
 
-    #Compounds = getPeaks(Compounds, W, reference_spectra, reference_spectra_coef)
-
+    # Deselect data points with NaN values
     deselect = np.full(len(W), True)
 
     for i in range(len(residual_spectra)):
-        arr = [index for (index, item) in enumerate(residual_spectra[i]) if item != item]
+        arr = [index for (index, item) in enumerate(residual_spectra[i]) if np.isnan(item)]
         for i in arr:
             deselect[i] = False
+
     return reference_spectra, residual_spectra, Compounds
 
-def getCompounds(file):
+def getCompounds(file: str) -> dict:
+    """
+    Load and return a dictionary of compounds from a binary file.
+
+    Args:
+        file (str): The path to the binary file containing the compounds data.
+
+    Returns:
+        dict: A dictionary containing information about chemical species.
+    """
+
     with open(file, 'rb') as handle:
         Compounds = pkl.load(handle)
     return Compounds

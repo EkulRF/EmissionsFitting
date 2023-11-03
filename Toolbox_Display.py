@@ -1,11 +1,26 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-def PlotTimeSeries(name, compound_list, x_sol, sigma, Nt):
+def PlotTimeSeries(name: str, compound_list: list, x_sol: np.ndarray, x_err: np.ndarray, Nt: int):
+    """
+    Plot time series data for a list of compounds.
+
+    Args:
+        name (str): Name of the plot or figure.
+        compound_list (list): List of compound names.
+        x_sol (np.ndarray): Solution for species concentrations over time.
+        x_err (np.ndarray): Standard error for the derived concentrations over time.
+        Nt (int): Number of time steps.
+
+    This function generates a time series plot for the present compounds, where each compound's
+    concentration is plotted over time. The resulting plot is saved with the specified 'name'.
+    
+    """
+    print('Plotting Time Series')
 
     num_rows = len(compound_list) // 2  # Calculate the number of rows needed
 
-    fig, axs = plt.subplots(num_rows+1, 2, figsize=(10, 6))
+    fig, axs = plt.subplots(num_rows + 1, 2, figsize=(10, 6))
 
     fig.text(0.5, 0.04, 'Time Step', ha='center')
     fig.text(0.07, 0.5, 'Concentration / ppm', va='center', rotation='vertical')
@@ -14,10 +29,10 @@ def PlotTimeSeries(name, compound_list, x_sol, sigma, Nt):
 
     for i, spc in enumerate(compound_list):
         row, col = divmod(i, 2)
-        axs[row,col].plot(np.arange(Nt), x_sol[i*Nt:(i+1)*Nt], color = 'red')
-        axs[row,col].fill_between(np.arange(Nt), x_sol[i*Nt:(i+1)*Nt] - 0.5*sigma[i*Nt:(i+1)*Nt],
-                                x_sol[i*Nt:(i+1)*Nt] + 0.5*sigma[i*Nt:(i+1)*Nt],
-                                color= "0.8")
+        axs[row, col].plot(np.arange(Nt), x_sol[i * Nt:(i + 1) * Nt], color='red')
+        axs[row, col].fill_between(np.arange(Nt), x_sol[i * Nt:(i + 1) * Nt] - 0.5 * x_err[i * Nt:(i + 1) * Nt],
+                                  x_sol[i * Nt:(i + 1) * Nt] + 0.5 * x_err[i * Nt:(i + 1) * Nt],
+                                  color="0.8")
         axs[row, col].set_title(spc, loc='right')
         axs[row, col].grid()
 
@@ -27,7 +42,19 @@ def PlotTimeSeries(name, compound_list, x_sol, sigma, Nt):
 
     return
 
-def PlotResiduals(y_model_wv_squeezed, y_model_time_squeezed):
+def PlotResiduals(y_model_wv_squeezed: np.ndarray, y_model_time_squeezed: np.ndarray):
+    """
+    Plot residuals both across wavenumbers and in time.
+
+    Args:
+        y_model_wv_squeezed (np.ndarray): Residuals across wavenumbers.
+        y_model_time_squeezed (np.ndarray): Residuals across time steps.
+
+    This function generates two plots: one for residuals across wavenumbers and one for residuals
+    in time. The resulting plots are saved in the '/plot' directory.
+
+    """
+    print('Plotting Residuals')
 
     W = np.load('EmFit_private/results/W.npy')
 
@@ -64,10 +91,23 @@ def PlotResiduals(y_model_wv_squeezed, y_model_time_squeezed):
 
     return
 
-def PlotER_TimeSeries(name, compound_list, x_sol, sigma, Nt, Norm_Species):
+def PlotER_TimeSeries(name: str, compound_list: list, x_sol: np.ndarray, x_err: np.ndarray, Nt: int, Norm_Species: str):
+    """
+    Plot emission ratio time series for the present compounds.
+
+    Args:
+        name (str): Name of the plot or figure.
+        compound_list (list): List of compound names.
+        x_sol (np.ndarray): Solution data for the compounds over time.
+        x_err (np.ndarray): Error data for the compounds over time.
+        Nt (int): Number of time steps.
+        Norm_Species (str): The species from which emissions are normalised.
+
+    """
+    print('Plotting ER Time Series')
 
     conc = x_sol[compound_list.index(Norm_Species)*Nt:(compound_list.index(Norm_Species)+1)*Nt]
-    se = x_sol[compound_list.index(Norm_Species)*Nt:(compound_list.index(Norm_Species)+1)*Nt]
+    se = x_err[compound_list.index(Norm_Species)*Nt:(compound_list.index(Norm_Species)+1)*Nt]
 
     num_rows = (len(compound_list)-1) // 2  # Calculate the number of rows needed
 
@@ -81,13 +121,13 @@ def PlotER_TimeSeries(name, compound_list, x_sol, sigma, Nt, Norm_Species):
             continue
 
         ER = x_sol[i*Nt:(i+1)*Nt] / conc
-        ER_se = [ER[a]*np.sqrt((se[a]/conc[a])**2 + (sigma[i*Nt:(i+1)*Nt][a]/x_sol[i*Nt:(i+1)*Nt][a])**2) for a in range (len(ER))]
+        ER_se = [ER[a]*np.sqrt((se[a]/conc[a])**2 + (x_err[i*Nt:(i+1)*Nt][a]/x_sol[i*Nt:(i+1)*Nt][a])**2) for a in range (len(ER))]
 
         row, col = divmod(i, 2)
         axs[row,col].plot(np.arange(Nt), ER, color = 'red')
-        # axs[row,col].fill_between(np.arange(Nt), np.array(ER) - 0.5*np.array(ER_se),
-        #                         np.array(ER) + 0.5*np.array(ER_se),
-        #                         color= "0.8")
+        axs[row,col].fill_between(np.arange(Nt), np.array(ER) - 0.5*np.array(ER_se),
+                                 np.array(ER) + 0.5*np.array(ER_se),
+                                 color= "0.8")
         axs[row, col].set_title(spc, loc='right')
         axs[row, col].grid()
 
