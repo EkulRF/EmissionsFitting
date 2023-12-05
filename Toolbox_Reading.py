@@ -1,6 +1,9 @@
+import os
+
 import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
+import pandas as pd
 import pickle as pkl
 import scipy
 
@@ -82,7 +85,7 @@ def read_data(
 
     return spectra, wv
 
-def generateData(Compounds: dict, path: str, sigma: float):
+def generateData(Compounds: dict, path: str, sigma: float, T: float, P: float, dataset: str):
     """
     Generate data from the Compounds dictionary, path, and broadening constant.
 
@@ -103,25 +106,27 @@ def generateData(Compounds: dict, path: str, sigma: float):
     # Read observed spectra and wavenumber array from the specified path
     spectra_obs, wv_obs = read_data(path)
 
-    T, P = 300, 1.01
-
     # Generate the reference matrix using the 'getReferenceMatrix' function
-    storage_mtx = getReferenceMatrix(Compounds, T, P, wv_obs, sigma)
+    storage_mtx = getReferenceMatrix(Compounds, T, P, wv_obs, sigma, dataset)
+    full_storage_mtx = getReferenceMatrix2(Compounds, T, P, wv_obs, sigma, dataset) #derives unbounded ref spectra.
+    #full_storage_mtx = 0
+    
     print("Reference Matrix Generated!!")
 
     # Replace NaN values in the reference matrix with zeros
-    for i in range(len(storage_mtx)):
-        for j in range(len(storage_mtx[i])):
-            if np.isnan(storage_mtx[i][j]):
-                storage_mtx[i][j] = 0
+    storage_mtx[np.isnan(storage_mtx)] = 0
+
+    np.save('/home/luke/data/Model/results/'+ dataset + '/full_resid_spectra.npy', remove_background(spectra_obs,wv_obs))
+    np.save('/home/luke/data/Model/results/'+ dataset + '/W_full.npy', wv_obs)
 
     # Process observed spectra and wavenumber array to match the reference matrix
     S = np.array([s[~np.all(storage_mtx == 0, axis=0)] for s in spectra_obs])
     W = wv_obs[~np.all(storage_mtx == 0, axis=0)]
-    np.save('EmFit_private/results/W.npy', W)
-
+    np.save('/home/luke/data/Model/results/'+ dataset + '/W.npy', W)
+    
     # Remove background from the processed spectra
     residual_spectra = remove_background(S, W)
+
     reference_spectra = storage_mtx[:, ~np.all(storage_mtx == 0, axis=0)]
 
     # Deselect data points with NaN values
@@ -132,7 +137,7 @@ def generateData(Compounds: dict, path: str, sigma: float):
         for i in arr:
             deselect[i] = False
 
-    return reference_spectra, residual_spectra, Compounds
+    return reference_spectra, residual_spectra, full_storage_mtx, Compounds
 
 def getCompounds(file: str) -> dict:
     """
@@ -148,3 +153,26 @@ def getCompounds(file: str) -> dict:
     with open(file, 'rb') as handle:
         Compounds = pkl.load(handle)
     return Compounds
+
+def makeDirs(dataset: str):
+
+    os.makedirs('/home/luke/data/Model/plots/'+dataset+'/', exist_ok=True)
+    os.makedirs('/home/luke/data/Model/plots/'+dataset+'/Residuals/', exist_ok=True)
+    os.makedirs('/home/luke/data/Model/plots/'+dataset+'/spectra_plots/', exist_ok=True)
+    os.makedirs('/home/luke/data/Model/results/'+dataset+'/', exist_ok=True)
+
+    return
+
+def getPT(dataset: str):
+
+    directory = "/home/luke/data/MATRIX_data/" + dataset + '/'
+
+    for filename in os.listdir(directory):
+        if filename.endswith('PT_Log.txt'):
+            df = pd.read_csv(directory + filename, delimiter=',')
+            
+    T = np.median(df.iloc[:,2])
+    P = np.median(df.iloc[:,3])/1000
+    
+
+    return P, T

@@ -7,6 +7,7 @@ import scipy
 import scipy.sparse as sp
 import scipy.sparse.linalg as spl
 from scipy.signal import convolve
+from scipy.ndimage import gaussian_filter1d
 
 from radis import calc_spectrum
 from radis import load_spec
@@ -93,7 +94,7 @@ def remove_background(S: np.ndarray, W: np.ndarray) -> np.ndarray:
 
     return np.array(absorbance_spectra)
 
-def getReferenceMatrix(Compounds: dict, T: float, P: float, W_obs: np.ndarray, sigma: float) -> np.ndarray:
+def getReferenceMatrix(Compounds: dict, T: float, P: float, W_obs: np.ndarray, sigma: float, dataset: str) -> np.ndarray:
     """
     Generate a reference matrix based on input compounds and parameters.
 
@@ -114,9 +115,12 @@ def getReferenceMatrix(Compounds: dict, T: float, P: float, W_obs: np.ndarray, s
     """
     output = []
     norm_constant = 1 / (np.sqrt(2 * np.pi) * sigma)
+    #norm_constant = 1
 
     for c in Compounds:
+
         plt.figure()
+
         bank = Compounds[c]['Source']
         tmp = np.zeros_like(W_obs)
 
@@ -131,7 +135,8 @@ def getReferenceMatrix(Compounds: dict, T: float, P: float, W_obs: np.ndarray, s
                     pressure=P,  # bar
                     Tgas=T,  # K
                     mole_fraction=10**(-6),
-                    path_length=500  # cm
+                    path_length=500,  # cm
+                    warnings={'AccuracyError':'ignore'},
                 )
             except:
                 print("BAD", c)
@@ -146,137 +151,27 @@ def getReferenceMatrix(Compounds: dict, T: float, P: float, W_obs: np.ndarray, s
             w, A = s.get('absorbance', wunit='cm-1')
 
             if sigma != 0:
-                broadened_A = convolve(
-                    A, norm_constant * np.exp(-(w - np.median(w))**2 / (2 * sigma**2)), mode='same')
-                broadened_A *= np.max(A) / np.max(broadened_A)
+
+                A = np.nan_to_num(A, nan=0)
+                broadened_A = convolve_with_peaks(w, A, sigma)
+                broadened_A = np.nan_to_num(broadened_A, nan=0)
+                # broadened_A = convolve(
+                #     A, norm_constant * np.exp(-(w - np.median(w))**2 / (2 * sigma**2)), mode='same')
+                #broadened_A *= np.max(A) / np.max(broadened_A)
                 tmp[iloc:jloc] = broadened_A
                 plt.plot(w, broadened_A)
+
             else:
                 tmp[iloc:jloc] = A
+                plt.plot(w, A)
 
         output.append(tmp)
 
         plt.show()
-        plt.savefig('EmFit_private/Spectra_Plots/' + str(c) + '.jpg')
+        plt.savefig('/home/luke/data/Model/plots/'+ dataset + '/spectra_plots/' + str(c) + '.png')
 
     ref_mat = np.array(output)
     return ref_mat
-
-# def convert2PPM(Compounds, x_sol, sigma, Nt):
-
-#     compound_list = list(Compounds.keys())
-
-#     for i, spc in enumerate(compound_list):
-#         f_d = Compounds[spc]['PPM_RelativeAbsorbance']
-#         f_d[0].insert(0,0)
-#         f_d[1].insert(0,0)
-#         f =  scipy.interpolate.interp1d(f_d[1], f_d[0])
-#         for j in range(len(x_sol[i*Nt:(i+1)*Nt])):
-#             sigma[i*Nt:(i+1)*Nt][j] *= (f(abs(x_sol[i*Nt:(i+1)*Nt][j]))/abs(x_sol[i*Nt:(i+1)*Nt][j]))
-#             x_sol[i*Nt:(i+1)*Nt][j] = f(abs(x_sol[i*Nt:(i+1)*Nt][j]))
-
-#     return x_sol, sigma
-
-# def convert2PPM_new(Compounds, x_sol, sigma, Nt, l):
-
-#     compound_list = list(Compounds.keys())
-
-#     for i, spc in enumerate(compound_list):
-
-#         peak_wv, extinction_coef, peak = Compounds[spc]['Peak_Info'][0], Compounds[spc]['Peak_Info'][1], Compounds[spc]['Peak_Info'][2]
-#         molar_m = Compounds[spc]['Molar_Mass']
-            
-#         for j in range(len(x_sol[i*Nt:(i+1)*Nt])):
-#             A = x_sol[i*Nt:(i+1)*Nt][j] * peak
-#             c = A / (extinction_coef * l)
-
-#             ppm = abs(c * molar_m * 10**6)
-#             #print(spc, ppm, peak, sigma[i*Nt:(i+1)*Nt][j])
-#             sigma[i*Nt:(i+1)*Nt][j] *= (ppm/abs(x_sol[i*Nt:(i+1)*Nt][j])) if ppm != 0 else 0
-#             x_sol[i*Nt:(i+1)*Nt][j] = ppm
-
-#     return x_sol, sigma
-
-# def getPeaks(Compounds, W, reference_spectra, reference_spectra_coef):
-
-#     for i, spc in enumerate(list(Compounds.keys())):
-        
-#         peak_wv = Compounds[spc]['Peak_Info'][0]
-
-#         ind = find_closest_index(peak_wv, W)
-
-#         peak = reference_spectra[i][find_largest_peak_in_range(reference_spectra[i], ind)]
-#         peak_coef = reference_spectra_coef[i][find_largest_peak_in_range(reference_spectra_coef[i], ind)]
-
-#         Compounds[spc]['Peak_Info'].append(peak)
-#         Compounds[spc]['Peak_Info'].append(peak_coef)
-
-#     return Compounds
-
-# def find_closest_index(target, array):
-#     # Initialize variables to keep track of the closest value and its index
-#     closest_value = array[0]
-#     closest_index = 0
-
-#     # Calculate the initial difference between the target and the first element of the array
-#     min_difference = abs(target - array[0])
-
-#     # Iterate through the array to find the closest value
-#     for i in range(1, len(array)):
-#         difference = abs(target - array[i])
-
-#         # Update the closest value and its index if a closer value is found
-#         if difference < min_difference:
-#             min_difference = difference
-#             closest_value = array[i]
-#             closest_index = i
-
-#     return closest_index
-
-# def find_closest_peak(arr, index):
-#     n = len(arr)
-
-#     # Initialize variables to store the closest peaks in both directions
-#     left_peak = None
-#     right_peak = None
-
-#     # Search for the closest peak to the left of the given index
-#     for i in range(index - 1, -1, -1):
-#         if arr[i] > arr[i + 1]:
-#             left_peak = i
-#             break
-
-#     # Search for the closest peak to the right of the given index
-#     for i in range(index + 1, n):
-#         if arr[i] > arr[i - 1]:
-#             right_peak = i
-#             break
-
-#     # Calculate the distances to the left and right peaks
-#     left_distance = float('inf') if left_peak is None else index - left_peak
-#     right_distance = float('inf') if right_peak is None else right_peak - index
-
-#     # Determine the closest peak
-#     if left_distance < right_distance:
-#         return left_peak
-#     elif right_distance < left_distance:
-#         return right_peak
-#     else:
-#         return left_peak
-
-# def find_largest_peak_in_range(arr, index):
-#     n = len(arr)
-#     left_limit = max(0, index - 200)
-#     right_limit = min(n, index + 201)
-
-#     max_peak = index
-
-#     for i in range(left_limit, right_limit):
-#         if arr[i] > arr[i - 1] and arr[i] > arr[i + 1]:
-#             if max_peak is None or arr[i] > arr[max_peak]:
-#                 max_peak = i
-
-#     return max_peak
 
 def squeeze_Residuals(y_model: np.ndarray, y: np.ndarray, Nl: int):
     """
@@ -314,3 +209,81 @@ def extract_nth_element_from_each_subarray(arr):
         result[:len(subarray), i] = subarray
 
     return result
+
+
+def getReferenceMatrix2(Compounds: dict, T: float, P: float, W_obs: np.ndarray, sigma: float, dataset: str) -> np.ndarray:
+    """
+    Generate a reference matrix based on input compounds and parameters.
+
+    Args:
+        Compounds (dict): A dictionary containing information about chemical species.
+        T (float): Temperature in Kelvin.
+        P (float): Pressure in bar.
+        W_obs (np.ndarray): The wavenumber array for observed spectra.
+        sigma (float): The broadening constant.
+
+    Returns:
+        np.ndarray: A reference matrix containing spectra of the specified compounds.
+
+    This function generates a reference matrix by simulating and processing spectra for
+    each compound defined in the 'Compounds' dictionary. It applies broadening, via a convolution with a
+    Gaussian, defined by the 'sigma' parameter, and the resulting spectra are stored in the reference matrix.
+
+    """
+    output = []
+    norm_constant = 1 / (np.sqrt(2 * np.pi) * sigma)
+
+    for c in Compounds:
+        plt.figure()
+        bank = Compounds[c]['Source']
+        tmp = np.zeros_like(W_obs)
+
+        s = calc_spectrum(
+            800, 6000,  # cm-1
+            molecule=c,
+            isotope='1',
+            pressure=P,  # bar
+            Tgas=T,  # K
+            mole_fraction=10**(-6),
+            path_length=500,  # cm
+            warnings={'AccuracyError':'ignore'},
+        )
+     
+        s.apply_slit(0.241, 'cm-1', shape="gaussian")  # Simulate an experimental slit
+        w, A = s.get('absorbance', wunit='cm-1')
+
+        iloc, jloc = np.argmin(np.abs(w.min() - W_obs)), np.argmin(np.abs(w.max() - W_obs))
+        s.resample(W_obs[iloc:jloc], energy_threshold=2)
+
+        w, A = s.get('absorbance', wunit='cm-1')
+
+        if sigma != 0:
+            broadened_A = convolve_with_peaks(w, A, sigma)
+
+
+            # broadened_A = convolve(
+            #     A, norm_constant * np.exp(-(w - np.median(w))**2 / (2 * sigma**2)), mode='same')
+            #broadened_A *= np.max(A) / np.max(broadened_A)
+            tmp[iloc:jloc] = broadened_A
+            plt.plot(w, broadened_A)
+        else:
+            tmp[iloc:jloc] = A
+
+        output.append(tmp)
+
+        plt.plot(w, A)
+        plt.show()
+        plt.savefig('/home/luke/data/Model/plots/'+ dataset + '/spectra_plots/' + str(c) + '_full.png')
+
+    ref_mat = np.array(output)
+    return ref_mat
+
+def convolve_with_peaks(x, y, sigma):
+    delta_functions = np.eye(len(x))
+    gaussian_kernel = gaussian_filter1d(delta_functions, sigma, mode='constant', cval=0.0, axis=0)
+    convolved_y = np.dot(gaussian_kernel, y)
+    
+    return convolved_y
+
+def gaussian(x, mu, sigma):
+    return np.exp(-((x - mu) / sigma) ** 2 / 2) / (sigma * np.sqrt(2 * np.pi))

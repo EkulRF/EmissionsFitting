@@ -13,54 +13,57 @@ from radis import Spectrum
 from Toolbox_Processing import *
 from Toolbox_Reading import *
 from Toolbox_Inversion import *
+from Toolbox_Display import *
 
-x_sol = np.load('sol.npy')
-sigma = np.load('sig.npy')
-Compounds = np.load('comp.npy', allow_pickle=True).item()
-ref_spec = np.load('ref.npy')
-obs_spec = np.load('obs.npy')
+# x_sol = np.load('/home/luke/data/Model/results/sol.npy')
+# sigma = np.load('/home/luke/data/Model/results/sig.npy')
+# Compounds = np.load('/home/luke/data/Model/results/comp.npy', allow_pickle=True).item()
+# ref_spec = np.load('/home/luke/data/Model/results/ref.npy')
+# full_ref_spec = np.load('/home/luke/data/Model/results/full_ref.npy')
+# obs_spec = np.load('/home/luke/data/Model/results/obs.npy')
+# full_obs_spec = np.load('/home/luke/data/Model/results/full_resid_spectra.npy')
+# W = np.load('/home/luke/data/Model/results/W.npy')
+# W_full = np.load('/home/luke/data/Model/results/W_full.npy')
 
-path = "EmFit_private/spectra/test_series"
+# y_model_wv_squeezed = np.load('/home/luke/data/Model/results/y_model_wv_squeezed.npy')
+# y_model_time_squeezed = np.load('/home/luke/data/Model/results/y_model_time_squeezed.npy')
+# C = np.load('/home/luke/data/Model/results/C.pickle', allow_pickle=True)
 
-Compounds = getCompounds('EmFit_private/Compounds.pickle')
+f = open("/home/luke/data/MATRIX_data/Peat3/(2016_03_04_13_24_37_450)_Run3_progression_ResultSeries.txt", "r")
 
-print(Compounds['CO']['bounds'])
+print(f.read())
 
+import pandas as pd
 
+# Read the data into a DataFrame
+df = pd.read_csv("/home/luke/data/MATRIX_data/Peat3/(2016_03_04_13_24_37_450)_Run3_progression_ResultSeries.txt", delim_whitespace=True, skiprows=[0])
 
+# Rename columns
+df.columns = [col.replace(".", "_") for col in df.columns]
 
-Compounds['H2S']['bounds'] = [[4900, 5300], [6000, 6500]]
-Compounds['CO']['bounds'] = [[1900, 2300]]
-Compounds['CO2']['bounds']= [[2260, 2400]]
+df['DateTime'] = pd.to_datetime(df['Date'] + ' ' + df['Time'])
+df = df.drop(['Date', 'Time'], axis=1)
 
-for c in Compounds:
+num_rows = (len(df.columns)-2) // 2  # Calculate the number of rows needed
 
-    if c =='CO':   
-        print(c) 
-        bank = Compounds[c]['Source']
+fig, axs = plt.subplots(num_rows + 1, 2, figsize=(10, 6))
 
-        T = 700
-        P = 1.01
-        for i in range(len(Compounds[c]['bounds'])):
-                bound = Compounds[c]['bounds'][i]
-                print(c, bound, bank)
-                s = calc_spectrum(bound[0], bound[1],         # cm-1
-                        molecule=c,
-                        isotope='1',
-                        pressure=P,   # bar
-                        Tgas=T,           # K
-                        mole_fraction=10**(-6),
-                        path_length=500      # cm
-                        )
-    
+fig.text(0.5, 0.04, 'Time Step', ha='center')
+fig.text(0.07, 0.5, 'Concentration / ppm', va='center', rotation='vertical')
 
-# sig = 0.4
-# gam = 10**(-3)
+plt.subplots_adjust(hspace=0.5)
 
-# ref_spec, obs_spec, Compounds = generateData(Compounds, path, sig)
+for i, spc in enumerate(df.columns):
 
-# for i, a in enumerate(list(Compounds.keys())):
-#     if a == 'H2S':
-#         plt.plot(ref_spec[i])
+    if spc == 'DateTime':
+        continue
 
-# plt.savefig('H2S.jpg')
+    row, col = divmod(i, 2)
+    axs[row, col].plot(df['DateTime'], df[spc], color='red')
+    axs[row, col].set_title(spc, loc='right')
+    axs[row, col].grid()
+
+fig.subplots_adjust(top=0.95)
+
+#plt.savefig('/home/luke/data/Model/plots/'+ dataset + '/' + name + 'OPUS.png')
+plt.savefig('OPUS.png')

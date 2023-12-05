@@ -23,10 +23,13 @@ def temporally_regularised_inversion(
     reference_spectra,
     residual_spectra,
     lambda_,
+    dataset,
+    compound_list,
     post_cov = True,
     do_spilu = True,
-):
-    """Temporally regularised inversion using selected bassis functions.
+    ):
+    """
+    Temporally regularised inversion using selected bassis functions.
 
     Args:
         absorption_spectra (np.ndarray): The absorption spectra, shape (Ns, Nl)
@@ -62,8 +65,19 @@ def temporally_regularised_inversion(
 
     # Use broadcasting to calculate the correlation matrix
     inv_corr = c_inv/ np.outer(std_devs, std_devs)
-    plt.imshow(np.log10(((inv_corr+1)/2)+ 1e-10),cmap='BuGn')
-    plt.savefig('EmFit_private/plot/Correlation_Matrix.jpg')
+
+    plot_inv = np.where(inv_corr > 0, np.log10(inv_corr), -np.log10(-inv_corr))
+    plt.imshow(plot_inv, cmap='gnuplot')
+
+    ticks = np.linspace(inv_corr.shape[0]/(2*len(compound_list)), inv_corr.shape[0] * (1 - (1/(2*len(compound_list)))), len(compound_list))
+    plt.xticks(ticks, compound_list, rotation=45)
+    plt.yticks(ticks, compound_list)
+
+    plt.colorbar()
+
+    plt.tight_layout()
+
+    plt.savefig('/home/luke/data/Model/plots/'+ dataset + '/Correlation_Matrix.png')
     plt.close()
 
     sigma = c_inv.diagonal()
@@ -73,7 +87,7 @@ def temporally_regularised_inversion(
 
     return (x_sol, sigma, C) if post_cov else (x_sol, sigma)
 
-def inversion_residual(ref_spec, obs_spec, x_sol):
+def inversion_residual(ref_spec, obs_spec, x_sol, x_err):
     """
     Derive 1D array versions of model and observed results.
 
@@ -81,13 +95,14 @@ def inversion_residual(ref_spec, obs_spec, x_sol):
         ref_spec (np.ndarray): Reference spectra matrix.
         obs_spec (np.ndarray): Observed spectra matrix.
         x_sol (np.ndarray): Solution data for the compounds over time.
+        x_err (np.ndarray): Standard error for each parameter at each timestep.
 
     Returns:
-        tuple: A tuple containing model results (y_model) and observed results (y).
+        tuple: A tuple containing model results (y_model), observed results (y), and model errors (y_model_err).
 
-    This function computes the model results (y_model) and observed results (y) based on the reference
-    spectra, observed spectra, and the solution data for the compounds over time. The function returns
-    these results as a tuple.
+    This function computes the model results (y_model), observed results (y), and model errors (y_model_err) based on the
+    reference spectra, observed spectra, solution data for the compounds over time, and the standard error for each parameter
+    at each timestep. The function returns these results as a tuple.
 
     """
     print('Calculating Residuals')
@@ -97,21 +112,23 @@ def inversion_residual(ref_spec, obs_spec, x_sol):
 
     y = obs_spec.flatten()
     y_model = np.zeros_like(y)
-
-    # for i, r in enumerate(ref_spec):
-    #     for j in range(Nt):
-    #         y_model[j*Nl:(j+1)*Nl] += r * x_sol[i*Nt:(i+1)*Nt][j]
+    y_model_err = np.zeros_like(y)
 
     ref_spec_reshaped = ref_spec.reshape(-1, 1, Nl)
     x_sol_reshaped = x_sol.reshape(-1, Nt, 1)
+    x_err_reshaped = x_err.reshape(-1, Nt, 1)
 
+    # Calculate the culmulative model output.
     y_model = np.sum(ref_spec_reshaped * x_sol_reshaped, axis=0).reshape(-1)
 
-    return y_model, y
+    # Calculate y_model_err
+    y_model_err = np.sqrt(np.sum((ref_spec_reshaped * x_sol_reshaped * x_err_reshaped)**2, axis=0)).reshape(-1)
 
+    return y_model, y, y_model_err
 
 def lasso_inversion(
     reference_spectra: np.ndarray,
+    full_reference_spectra: np.ndarray,
     residual_spectra: np.ndarray,
     Compounds: dict
     ):
@@ -187,8 +204,10 @@ def lasso_inversion(
 
     # Filter the reference spectra to keep only those with present compounds
     reference_spectra = reference_spectra[[sum(result[i]) != 0 for i in range(Ns)]]
+    full_reference_spectra = full_reference_spectra[[sum(result[i]) != 0 for i in range(Ns)]]
+    #np.save('EmFit_private/results/full_ref.npy', full_reference_spectra)
 
     # Get the dimensions of the updated reference spectra
     (Ns, Nl), Nt = reference_spectra.shape, residual_spectra.shape[0]
 
-    return reference_spectra, new_Compounds,  Lasso_Evaluation
+    return reference_spectra, new_Compounds,  Lasso_Evaluation, full_reference_spectra
