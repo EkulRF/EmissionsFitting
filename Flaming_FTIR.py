@@ -1,14 +1,14 @@
 # Import necessary libraries and modules
 import numpy as np
-from Toolbox_Processing import *
-from Toolbox_Reading import *
-from Toolbox_Inversion import *
-from Toolbox_Display import *
+from Toolbox.Toolbox_Processing import *
+from Toolbox.Toolbox_Reading import *
+from Toolbox.Toolbox_Inversion import *
+from Toolbox.Toolbox_Display import *
 
 # Define the path to the spectra data
 #path = "/home/luke/lukeflamingradis/EmFit_private/spectra/test_series"
 base_path = "/home/luke/data/MATRIX_data/"
-dataset = "Peat8"
+dataset = "Peat3"
 
 makeDirs(dataset)
 
@@ -28,7 +28,7 @@ for r in remove:
     Compounds.pop(r)
 
 # Define broadening and regularization constants
-broadening_constant = 0.8
+broadening_constant = 0.241
 regularisation_constant = 10**(-5)
 
 # Generate reference and observed spectra, and update the Compounds dictionary
