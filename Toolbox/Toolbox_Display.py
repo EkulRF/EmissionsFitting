@@ -230,18 +230,16 @@ def PlotER_TimeSeries(name: str, compound_list: list, x_sol: np.ndarray, x_err: 
 
 def PlotSpectralResiduals(full_ref_spec, full_obs_spec, W_full, x_sol, sigma, Compounds, dataset: str, t = None):
 
-    if t==None:
-        t = max_sum_interval(x_sol, int(len(x_sol)/len(list(Compounds.keys()))))
-    print(t)
-
     y_model, y, y_model_err = inversion_residual(full_ref_spec, full_obs_spec, x_sol, np.sqrt(sigma))
 
     Nl = full_ref_spec.shape[1]
+    Nt = full_obs_spec.shape[0]
 
+    for j, key in enumerate(Compounds):
 
-    y_model_sel, y_sel, y_model_err_sel = y_model[t*Nl:(t+1)*Nl], y[t*Nl:(t+1)*Nl], y_model_err[t*Nl:(t+1)*Nl]
-
-    for key in Compounds:
+        species_arr = x_sol[j * Nt:(j + 1) * Nt]
+        t = np.argmax(species_arr)
+        y_model_sel, y_sel, y_model_err_sel = y_model[t*Nl:(t+1)*Nl], y[t*Nl:(t+1)*Nl], y_model_err[t*Nl:(t+1)*Nl]
 
         num = len(Compounds[key]['bounds'])
         fig, axs = plt.subplots(num, 2, figsize=(12, 4*num), gridspec_kw={'width_ratios': [3, 1]})

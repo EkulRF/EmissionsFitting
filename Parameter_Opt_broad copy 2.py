@@ -37,10 +37,12 @@ x_sol, sigma, C = temporally_regularised_inversion(ref_spec, obs_spec, regularis
 (Ns, Nl), Nt = ref_spec.shape, obs_spec.shape[0]
 
 from scipy.optimize import minimize
+from sklearn.linear_model import LinearRegression
 
-def generateSingleRef(comp, W_obs, T, P):
+def generateSingleRef(comp, c, W_obs, T, P):
 
     output = []
+    loc = []
     norm_constant = 1 / (np.sqrt(2 * np.pi) * sigma)
 
     bank = comp['Source']
@@ -59,8 +61,8 @@ def generateSingleRef(comp, W_obs, T, P):
                 path_length=500,  # cm
                 warnings={'AccuracyError':'ignore'},
             )
-        except:
-            print("BAD", c)
+        except Exception as error:
+            print("An exception occurred:", error)
             continue
 
         s.apply_slit(0.241, 'cm-1', shape="gaussian")  # Simulate an experimental slit
@@ -72,10 +74,11 @@ def generateSingleRef(comp, W_obs, T, P):
         w, A = s.get('absorbance', wunit='cm-1')
 
         tmp[iloc:jloc] = A
+        loc.append([iloc,jloc])
 
     ref_mat = np.array(tmp)
 
-    return ref_mat
+    return ref_mat, loc
 
 def cost_function(params, observed_spectra, theoretical_spectra):
     T_values = params[:len(params)//2]
@@ -85,7 +88,7 @@ def cost_function(params, observed_spectra, theoretical_spectra):
     cost = np.sum((observed_spectra - theoretical_spectra)**2)
     return cost
 
-wv_obs = np.load('/home/luke/data/Model/results/'+ dataset + '/W_full.npy')
+wv_obs = np.load('/home/luke/data/Model/results/'+ dataset + '/W.npy')
 T_guess = np.linspace(273, 473, 100)
 P_guess = np.linspace(0.9, 10, 100)
 initial_params = np.concatenate([T_guess, P_guess])
@@ -100,7 +103,14 @@ for i, spc in enumerate(list(Compounds.keys())):
     ind = np.argmax(species_arr)
     obs_selection = obs_spec[ind]
 
-    theoretical_spectra = [generateSingleRef(Compounds[spc], T, P, wv_obs) for T, P in zip(T_values, P_values)]
+    loc = generateSingleRef(Compounds[spc], spc, wv_obs, 273, 1.01)[1]
+
+    obs_selection = [element for start, end in loc for element in obs_selection[start:end + 1]]
+
+    #theoretical_spectra = [generateSingleRef(Compounds[spc], spc, wv_obs, T, P)[0] for T, P in zip(T_guess, P_guess)]
+    theoretical_spectra = [[element for start, end in loc for element in generateSingleRef(Compounds[spc], spc, wv_obs, T, P)[0][start:end + 1]]
+ for T, P in zip(T_guess, P_guess)]
+    theoretical_spectra = [LinearRegression().fit(np.array(obs_selection).reshape(-1, 1), spectrum).coef_[0, 0] * spectrum for spectrum in theoretical_spectra]
 
     # Optimize the cost function using scipy's minimize function
     result = minimize(cost_function, initial_params, args=(obs_selection,theoretical_spectra), bounds=[(273, 473)] * len(T_guess) + [(0.9, 10)] * len(P_guess))
@@ -111,47 +121,6 @@ for i, spc in enumerate(list(Compounds.keys())):
     print("Optimized T:", optimized_T)
     print("Optimized P:", optimized_P)
 
-
-
-# # Define broadening and regularization constants
-# regularisation_constant = 10**(-3)
-
-# broad_array = np.logspace(-6,-1, 60)
-
-# ref_spec_base, obs_spec, wv_obs = generateData_optimisation(Compounds, base_path + dataset, 0, T, P, dataset)
-
-# ref_spec_base = np.nan_to_num(ref_spec_base)
-# obs_spec = np.nan_to_num(obs_spec)
-
-# obs_spec = obs_spec[:, ~np.all(ref_spec_base == 0, axis=0)]
-# ref_spec_base = ref_spec_base[:, ~np.all(ref_spec_base == 0, axis=0)]
-
-# ref_spec, Compounds, Lass = lasso_inversion_opt(ref_spec_base, obs_spec, Compounds)
-
-# t_steps = [random.randint(0, obs_spec.shape[0]) for _ in range(10)]
-
-# obs_spec = obs_spec[t_steps,:]
-
-# for i, key in enumerate(Compounds):
-
-#     print("Finding optimal spectra for ", key)
-    
-#     mol_arr = getReferenceMatrix_opt(Compounds[key], T, P, wv_obs, broad_array, key)
-
-#     Lasso_eval = []
-
-#     for arr in mol_arr:
-
-#         reference_spectra = ref_spec_base
-
-#         reference_spectra[i] = np.nan_to_num(arr[~np.all(ref_spec_base == 0, axis=0)])
-
-#         S = np.array([s[~np.all(reference_spectra == 0, axis=0)] for s in obs_spec])
-#         reference_spectra = np.array(reference_spectra[:, ~np.all(reference_spectra == 0, axis=0)])
-
-#         Lasso_eval.append(lasso_inversion_opt2(reference_spectra, S, Compounds))
-
-#     # Find minima
-#     ind = np.where([x['RMSE'] for x in Lasso_eval] == [x['RMSE'] for x in Lasso_eval].min())
-#     print(key, ind, mol_arr[ind])
-#     print([x['RMSE'] for x in Lasso_eval])
+    best_T = np.mean(optimized_T, axis=0)
+    best_P = np.mean(best_P, axis=0)
+    print("T, P = ", best_T, best_P)

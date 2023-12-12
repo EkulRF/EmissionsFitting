@@ -138,8 +138,8 @@ def getReferenceMatrix(Compounds: dict, T: float, P: float, W_obs: np.ndarray, s
                     path_length=500,  # cm
                     warnings={'AccuracyError':'ignore'},
                 )
-            except:
-                print("BAD", c)
+            except Exception as error:
+                print("An exception occurred:", error)
                 continue
 
             s.apply_slit(0.241, 'cm-1', shape="gaussian")  # Simulate an experimental slit
@@ -379,8 +379,8 @@ def getReferenceMatrix_opt(c, T, P, wv_obs, broad_array, key) -> np.ndarray:
                     path_length=500,  # cm
                     warnings={'AccuracyError':'ignore'},
                 )
-            except:
-                print("BAD", c)
+            except Exception as error:
+                print("An exception occurred:", error)
                 continue
 
             s.apply_slit(0.241, 'cm-1', shape="gaussian")  # Simulate an experimental slit
