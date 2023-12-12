@@ -39,6 +39,17 @@ x_sol, sigma, C = temporally_regularised_inversion(ref_spec, obs_spec, regularis
 from scipy.optimize import minimize
 from sklearn.linear_model import LinearRegression
 
+def calculate_rmse(observed, theoretical):
+    """Calculate Root Mean Squared Error between observed and theoretical spectra."""
+    return np.sqrt(np.mean((observed - theoretical)**2))
+
+def find_min_rmse(observed_spectra, theoretical_spectra):
+    """Find the minimum RMSE and its corresponding index."""
+    rmse_values = [calculate_rmse(observed_spectra, spectrum) for spectrum in theoretical_spectra]
+    min_rmse_index = np.argmin(rmse_values)
+    
+    return rmse_values, min_rmse_index
+
 def generateSingleRef(comp, c, W_obs, T, P):
 
     output = []
@@ -80,17 +91,9 @@ def generateSingleRef(comp, c, W_obs, T, P):
 
     return ref_mat, loc
 
-def cost_function(params, observed_spectra, theoretical_spectra):
-    T_values = params[:len(params)//2]
-    P_values = params[len(params)//2:]
-
-    # Calculate the sum of squared differences between observed and theoretical spectra
-    cost = np.sum((observed_spectra - theoretical_spectra)**2)
-    return cost
-
 wv_obs = np.load('/home/luke/data/Model/results/'+ dataset + '/W.npy')
-T_guess = np.linspace(273, 473, 100)
-P_guess = np.linspace(0.9, 10, 100)
+T_guess = np.linspace(273, 673, 200)
+P_guess = np.linspace(0.9, 10, 200)
 initial_params = np.concatenate([T_guess, P_guess])
 # Define bounds for the parameters if needed
 bounds = [(0, None)] * len(initial_params)  # Assuming non-negative values for simplicity
@@ -107,20 +110,23 @@ for i, spc in enumerate(list(Compounds.keys())):
 
     obs_selection = [element for start, end in loc for element in obs_selection[start:end + 1]]
 
-    #theoretical_spectra = [generateSingleRef(Compounds[spc], spc, wv_obs, T, P)[0] for T, P in zip(T_guess, P_guess)]
     theoretical_spectra = [[element for start, end in loc for element in generateSingleRef(Compounds[spc], spc, wv_obs, T, P)[0][start:end + 1]]
  for T, P in zip(T_guess, P_guess)]
-    theoretical_spectra = [LinearRegression().fit(np.array(obs_selection).reshape(-1, 1), spectrum).coef_[0, 0] * spectrum for spectrum in theoretical_spectra]
+    #theoretical_spectra = [np.nan_to_num(spectrum) * LinearRegression().fit(np.nan_to_num(obs_selection).reshape(-1, 1), np.nan_to_num(spectrum)).coef_[0] for spectrum in theoretical_spectra]
+    theoretical_spectra = [((np.nan_to_num(spectrum) * LinearRegression().fit(np.nan_to_num(spectrum).reshape(-1, 1), np.nan_to_num(obs_selection)).coef_[0]) + LinearRegression().fit(np.nan_to_num(spectrum).reshape(-1, 1), np.nan_to_num(obs_selection)).intercept_) for spectrum in theoretical_spectra]
 
-    # Optimize the cost function using scipy's minimize function
-    result = minimize(cost_function, initial_params, args=(obs_selection,theoretical_spectra), bounds=[(273, 473)] * len(T_guess) + [(0.9, 10)] * len(P_guess))
-    optimized_params = result.x
-    optimized_T = optimized_params[:len(T_guess)]
-    optimized_P = optimized_params[len(T_guess):]
+    for i in range(len(theoretical_spectra)):
+        plt.figure()
+        plt.plot(theoretical_spectra[i])
+        plt.plot(np.nan_to_num(obs_selection))
+        plt.savefig('test' + str(i) + '.jpg')
+        plt.show()
+    
+    rmse_values, min_rmse_index = find_min_rmse(obs_selection, theoretical_spectra)
 
-    print("Optimized T:", optimized_T)
-    print("Optimized P:", optimized_P)
+    plt.figure()
+    plt.plot(T_guess, rmse_values)
+    plt.savefig(spc + '.png')
+    plt.show()
 
-    best_T = np.mean(optimized_T, axis=0)
-    best_P = np.mean(best_P, axis=0)
-    print("T, P = ", best_T, best_P)
+    reference_spec =  generateSingleRef(Compounds[spc], spc, wv_obs, T_guess[min_rmse_index], P_guess[min_rmse_index])[0]
