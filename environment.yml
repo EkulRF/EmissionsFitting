@@ -1,4 +1,4 @@
-name: Flaming_Radis
+name: PyroSpectra
 channels:
   - cantera
   - conda-forge
@@ -376,4 +376,4 @@ dependencies:
     - vaex==4.16.0
     - watchfiles==0.19.0
     - websockets==11.0.3
-prefix: C:\Users\luker\Anaconda3\envs\Flaming_Radis
+prefix: C:\Users\luker\Anaconda3\envs\PyroSpectra
