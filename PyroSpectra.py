@@ -98,6 +98,8 @@ initial_params = np.concatenate([T_guess, P_guess])
 # Define bounds for the parameters if needed
 bounds = [(0, None)] * len(initial_params)  # Assuming non-negative values for simplicity
 
+Ref_Spec = []
+
 for i, spc in enumerate(list(Compounds.keys())):
 
     print(spc)
@@ -130,3 +132,4 @@ for i, spc in enumerate(list(Compounds.keys())):
     plt.show()
 
     reference_spec =  generateSingleRef(Compounds[spc], spc, wv_obs, T_guess[min_rmse_index], P_guess[min_rmse_index])[0]
+    Ref_Spec.append(reference_spec)
