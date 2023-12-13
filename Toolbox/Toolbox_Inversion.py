@@ -73,7 +73,8 @@ def temporally_regularised_inversion(
     plt.xticks(ticks, compound_list, rotation=45)
     plt.yticks(ticks, compound_list)
 
-    plt.colorbar()
+    cbar = plt.colorbar()
+    cbar.set_label('$\text{sgn}(\rho)\log_{10}(\vert\rho\vert)$')
 
     plt.tight_layout()
 
