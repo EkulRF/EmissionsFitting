@@ -17,7 +17,7 @@ os.makedirs('/home/luke/data/Model/results_param/'+dataset+'/', exist_ok=True)
 P, T = getPT(dataset)
 
 # Load chemical compound information from a pickle file
-Compounds = getCompounds('/home/luke/lukeflamingradis/EmFit_private/Compounds.pickle')
+Compounds = getCompounds('/home/luke/lukeflamingradis/EmFit_private/EmissionsSpeciesInfo.pickle')
 
 # List of compounds to be removed from the Compounds dictionary
 remove = ['SiH', 'CaF', 'SiS', 'BeH', 'HF', 'NH', 'SiH2', 'AlF', 'SH', 'CH', 'AlH', 'TiH', 'CaH', 'LiF', 'MgH', 'ClO', 'CH3Br', 'H2S']
@@ -38,92 +38,6 @@ x_sol, sigma, C = temporally_regularised_inversion(ref_spec, obs_spec, regularis
 
 from scipy.optimize import minimize
 from sklearn.linear_model import LinearRegression
-
-def calculate_rmse(observed, theoretical):
-    """Calculate Root Mean Squared Error between observed and theoretical spectra."""
-    return np.sqrt(np.mean((observed - theoretical)**2))
-
-def find_min_rmse(observed_spectra, theoretical_spectra):
-    """Find the minimum RMSE and its corresponding index."""
-    rmse_values = [calculate_rmse(observed_spectra, spectrum) for spectrum in theoretical_spectra]
-    min_rmse_index = np.argmin(rmse_values)
-    
-    return rmse_values, min_rmse_index
-
-def generateSingleRef(comp, c, W_obs, T, P):
-
-    output = []
-    loc = []
-    norm_constant = 1 / (np.sqrt(2 * np.pi) * sigma)
-
-    bank = comp['Source']
-    tmp = np.zeros_like(W_obs)
-
-    for i in range(len(comp['bounds'])):
-        bound = comp['bounds'][i]
-        try:
-            s = calc_spectrum(
-                bound[0], bound[1],  # cm-1
-                molecule=c,
-                isotope='1',
-                pressure=P,  # bar
-                Tgas=T,  # K
-                mole_fraction=10**(-6),
-                path_length=500,  # cm
-                warnings={'AccuracyError':'ignore'},
-            )
-        except Exception as error:
-            print("An exception occurred:", error)
-            continue
-
-        s.apply_slit(0.241, 'cm-1', shape="gaussian")  # Simulate an experimental slit
-        w, A = s.get('absorbance', wunit='cm-1')
-
-        iloc, jloc = np.argmin(np.abs(w.min() - W_obs)), np.argmin(np.abs(w.max() - W_obs))
-        s.resample(W_obs[iloc:jloc], energy_threshold=2)
-
-        w, A = s.get('absorbance', wunit='cm-1')
-
-        tmp[iloc:jloc] = A
-        loc.append([iloc,jloc])
-
-    ref_mat = np.array(tmp)
-
-    return ref_mat, loc
-
-def generateSingleFullRef(comp, c, W_obs, T, P):
-
-    output = []
-    loc = []
-
-    bank = comp['Source']
-    tmp = np.zeros_like(W_obs)
-
-    try:
-        s = calc_spectrum(
-            800, 8000,  # cm-1
-            molecule=c,
-            isotope='1',
-            pressure=P,  # bar
-            Tgas=T,  # K
-            mole_fraction=10**(-6),
-            path_length=500,  # cm
-            warnings={'AccuracyError':'ignore'},
-        )
-    except Exception as error:
-        print("An exception occurred:", error)
-
-    s.apply_slit(0.241, 'nm', shape="gaussian")  # Simulate an experimental slit
-    w, A = s.get('absorbance', wunit='cm-1')
-
-    iloc, jloc = np.argmin(np.abs(w.min() - W_obs)), np.argmin(np.abs(w.max() - W_obs))
-    s.resample(W_obs[iloc:jloc], energy_threshold=2)
-
-    w, A = s.get('absorbance', wunit='cm-1')
-
-    ref_mat = np.array(A)
-
-    return ref_mat, loc
 
 wv_obs = np.load('/home/luke/data/Model/results/'+ dataset + '/W.npy')
 T_guess = np.linspace(273, 673, 200)
@@ -151,6 +65,10 @@ for i, spc in enumerate(list(Compounds.keys())):
     theoretical_spectra = [[element for start, end in loc for element in generateSingleRef(Compounds[spc], spc, wv_obs, T, P)[0][start:end + 1]]
  for T, P in zip(T_guess, P_guess)]
     theoretical_spectra = [((np.nan_to_num(spectrum) * LinearRegression().fit(np.nan_to_num(spectrum).reshape(-1, 1), np.nan_to_num(obs_selection)).coef_[0]) + LinearRegression().fit(np.nan_to_num(spectrum).reshape(-1, 1), np.nan_to_num(obs_selection)).intercept_) for spectrum in theoretical_spectra]
+
+    np.save('/home/luke/data/Model/results_param/'+dataset+'/theoretical_spectra_' + spc + '.npy', theoretical_spectra)
+    np.save('/home/luke/data/Model/results_param/'+dataset+'/wv_selection_' + spc + '.npy', wv_selection)
+    np.save('/home/luke/data/Model/results_param/'+dataset+'/obs_selection_' + spc + '.npy', obs_selection)
 
     from ipywidgets import interact, widgets
     import mpld3

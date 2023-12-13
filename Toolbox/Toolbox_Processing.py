@@ -398,3 +398,98 @@ def getReferenceMatrix_opt(c, T, P, wv_obs, broad_array, key) -> np.ndarray:
     mol_array = np.array(output)
 
     return mol_array
+
+def generateSingleRef(comp, c, W_obs, T, P):
+
+    output = []
+    loc = []
+
+    bank = comp['Source']
+    tmp = np.zeros_like(W_obs)
+
+    for i in range(len(comp['bounds'])):
+        bound = comp['bounds'][i]
+        try:
+            s = calc_spectrum(
+                bound[0], bound[1],  # cm-1
+                molecule=c,
+                isotope='1',
+                pressure=P,  # bar
+                Tgas=T,  # K
+                mole_fraction=10**(-6),
+                path_length=500,  # cm
+                warnings={'AccuracyError':'ignore'},
+            )
+        except Exception as error:
+            print("An exception occurred:", error)
+            continue
+
+        s.apply_slit(0.241, 'cm-1', shape="gaussian")  # Simulate an experimental slit
+        w, A = s.get('absorbance', wunit='cm-1')
+
+        iloc, jloc = np.argmin(np.abs(w.min() - W_obs)), np.argmin(np.abs(w.max() - W_obs))
+        s.resample(W_obs[iloc:jloc], energy_threshold=2)
+
+        w, A = s.get('absorbance', wunit='cm-1')
+
+        tmp[iloc:jloc] = A
+        loc.append([iloc,jloc])
+
+    ref_mat = np.array(tmp)
+
+    return ref_mat, loc
+
+def generateSingleFullRef(comp, c, W_obs, T, P):
+
+    output = []
+    loc = []
+
+    bank = comp['Source']
+    tmp = np.zeros_like(W_obs)
+
+    try:
+        s = calc_spectrum(
+            800, 8000,  # cm-1
+            molecule=c,
+            isotope='1',
+            pressure=P,  # bar
+            Tgas=T,  # K
+            mole_fraction=10**(-6),
+            path_length=500,  # cm
+            warnings={'AccuracyError':'ignore'},
+        )
+    except Exception as error:
+        print("An exception occurred:", error)
+
+    s.apply_slit(0.241, 'nm', shape="gaussian")  # Simulate an experimental slit
+    w, A = s.get('absorbance', wunit='cm-1')
+
+    iloc, jloc = np.argmin(np.abs(w.min() - W_obs)), np.argmin(np.abs(w.max() - W_obs))
+    s.resample(W_obs[iloc:jloc], energy_threshold=2)
+
+    w, A = s.get('absorbance', wunit='cm-1')
+
+    ref_mat = np.array(A)
+
+    return ref_mat, loc
+
+def calculate_rmse(observed, theoretical):
+    """Calculate Root Mean Squared Error between observed and theoretical spectra."""
+    return np.sqrt(np.mean((observed - theoretical)**2))
+
+def find_min_rmse(observed_spectra, theoretical_spectra):
+    """Find the minimum RMSE and its corresponding index."""
+    rmse_values = [calculate_rmse(observed_spectra, spectrum) for spectrum in theoretical_spectra]
+    min_rmse_index = np.argmin(rmse_values)
+
+    # Find the index of the minimum point
+    min_index = np.argmin(rmse_values)
+
+    # Check if the dataset forms a U-shape
+    if min_index > 0 and min_index < len(rmse_values) - 1:
+        if rmse_values[min_index - 1] > rmse_values[min_index] and rmse_values[min_index + 1] > rmse_values[min_index]:
+            min_rmse_index = min_index  # U-shape detected
+
+    min_rmse_index =  0  # No U-shape detected
+    
+    return rmse_values, min_rmse_index
