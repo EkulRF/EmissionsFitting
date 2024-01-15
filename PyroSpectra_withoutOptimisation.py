@@ -6,17 +6,22 @@ from Toolbox.Toolbox_Inversion import *
 from Toolbox.Toolbox_Display import *
 
 # Define the path to the spectra data
-#path = "/home/luke/lukeflamingradis/EmFit_private/spectra/test_series"
 base_path = "/home/luke/data/MATRIX_data/"
-dataset = "Peat3"
+dataset = "Peat9"
 
 makeDirs(dataset)
 
 P, T = getPT(dataset)
-#P=1.01
+print(f"Pressure: {P}, Temperature: {T}")
+P *= 10
+T = 250
+T, P = 693, 0.101325
 
 # Load chemical compound information from a pickle file
-Compounds = getCompounds('/home/luke/lukeflamingradis/EmFit_private/Compounds.pickle')
+Compounds = getCompounds('/home/luke/lukeflamingradis/EmFit_private/EmissionsSpeciesInfo.pickle')
+
+#Compounds['CO2']['bounds'] = [Compounds['CO2']['bounds'][0]]
+Compounds['CO']['bounds'] = [Compounds['CO']['bounds'][0]]
 
 # List of compounds to be removed from the Compounds dictionary
 remove = ['SiH', 'CaF', 'SiS', 'BeH', 'HF', 'NH', 'SiH2', 'AlF', 'SH', 'CH', 'AlH', 'TiH', 'CaH', 'LiF', 'MgH', 'ClO']
@@ -66,7 +71,6 @@ PlotTimeSeries('PPM_TimeSeries', list(Compounds.keys()), x_sol, np.sqrt(sigma), 
 PlotER_TimeSeries('ER_TimeSeries', list(Compounds.keys()), x_sol, np.sqrt(sigma), obs_spec.shape[0], 'CO2', dataset)
 PlotOPUS_Results('OPUS_result', dataset)
 
-#t_step = 150
 PlotSpectralResiduals(full_ref_spec, np.load('/home/luke/data/Model/results/'+ dataset + '/full_resid_spectra.npy'), np.load('/home/luke/data/Model/results/'+ dataset + '/W_full.npy'), x_sol, sigma, Compounds, dataset)
 # Plot residuals both in time and across wavenumbers
 #PlotResiduals(y_model_wv_squeezed, y_model_time_squeezed, dataset)

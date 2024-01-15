@@ -1,7 +1,6 @@
 # Import necessary libraries and modules
 import os
 import numpy as np
-import random
 from Toolbox.Toolbox_Processing import *
 from Toolbox.Toolbox_Reading import *
 from Toolbox.Toolbox_Inversion import *
@@ -69,31 +68,6 @@ for i, spc in enumerate(list(Compounds.keys())):
     np.save('/home/luke/data/Model/results_param/'+dataset+'/theoretical_spectra_' + spc + '.npy', theoretical_spectra)
     np.save('/home/luke/data/Model/results_param/'+dataset+'/wv_selection_' + spc + '.npy', wv_selection)
     np.save('/home/luke/data/Model/results_param/'+dataset+'/obs_selection_' + spc + '.npy', obs_selection)
-
-    from ipywidgets import interact, widgets
-    import mpld3
-
-    def update_plot(index):
-
-        fig, ax = plt.subplots(figsize=(8, 6))
-        ax.plot(wv_selection, theoretical_spectra[index, :], 'k-.',  label=f'Fitted Spectra')
-        ax.plot(wv_selection, np.nan_to_num(obs_selection), color = 'red', label=f'Observed Spectra')
-        ax.set_title('Theoretical Spectra at Broadening Parameter = {:.2f}'.format((T_guess[index]/1254)))
-        ax.set_xlabel('Wavelength Selection')
-        ax.set_ylabel('Absorbance')
-        ax.legend()
-        ax.grid(True)
-
-        interactive_html = mpld3.fig_to_html(fig)
-
-        # Display the HTML page (optional, you can save it or use it as needed)
-        mpld3.display()
-
-    # Create an interactive slider widget
-    index_slider = widgets.IntSlider(value=0, min=0, max=len((T_guess/1254)) - 1, step=1, description='Broadening Parameter')
-
-    # Connect the slider to the update_plot function
-    interact(update_plot, index=index_slider)
     
     rmse_values, min_rmse_index = find_min_rmse(obs_selection, theoretical_spectra)
 
@@ -103,27 +77,38 @@ for i, spc in enumerate(list(Compounds.keys())):
     plt.show()
 
     reference_spec =  generateSingleRef(Compounds[spc], spc, wv_obs, T_guess[min_rmse_index], P_guess[min_rmse_index])[0]
-    full_ref_spec =  generateSingleFullRef(Compounds[spc], spc, wv_obs, T_guess[min_rmse_index], P_guess[min_rmse_index])
-    Full_Ref_Spec.append(full_ref_spec)
+    full_ref_spec =  generateSingleFullRef(Compounds[spc], spc, wv_obs, T_guess[min_rmse_index], P_guess[min_rmse_index])[0]
     Ref_Spec.append(reference_spec)
+    Full_Ref_Spec.append(full_ref_spec)
+
+Full_Ref_Spec = np.array(Full_Ref_Spec)
+Ref_Spec = np.array(Ref_Spec)
+Ref_Spec[np.isnan(Ref_Spec)] = 0 
+
+Obs = np.array([s[~np.all(Ref_Spec == 0, axis=0)] for s in obs_spec])
+Ref = np.array(Ref_Spec[:, ~np.all(Ref_Spec == 0, axis=0)])
+W = wv_obs[~np.all(Ref_Spec == 0, axis=0)]
 
 # Perform Tikhonov regularization
-x_sol, sigma, C = temporally_regularised_inversion(Ref_Spec, obs_spec, regularisation_constant, dataset, list(Compounds.keys()))
+x_sol, sigma, C = temporally_regularised_inversion(Ref, Obs, regularisation_constant, dataset, list(Compounds.keys()))
 
 # Calculate modeled and observed residuals
-y_model, y, y_model_err = inversion_residual(Ref_Spec, obs_spec, x_sol, np.sqrt(sigma))
+y_model, y, y_model_err = inversion_residual(Ref, Obs, x_sol, np.sqrt(sigma))
 
 # Squeeze and extract information from the residuals
-y_model_wv_squeezed, y_model_time_squeezed = squeeze_Residuals(y_model, y, Ref_Spec.shape[1])
+y_model_wv_squeezed, y_model_time_squeezed = squeeze_Residuals(y_model, y, Ref.shape[1])
 
 
 # Saving Results
 np.save('/home/luke/data/Model/results/'+ dataset + '/sol.npy', x_sol)
 np.save('/home/luke/data/Model/results/'+ dataset + '/sig.npy', sigma)
 np.save('/home/luke/data/Model/results/'+ dataset + '/comp.npy', Compounds)
-np.save('/home/luke/data/Model/results/'+ dataset + '/ref.npy', ref_spec)
-np.save('/home/luke/data/Model/results/'+ dataset + '/full_ref.npy', Full_Ref_Spec)
-np.save('/home/luke/data/Model/results/'+ dataset + '/obs.npy', obs_spec)
+np.save('/home/luke/data/Model/results/'+ dataset + '/ref.npy', Ref)
+try:
+    np.save('/home/luke/data/Model/results/'+ dataset + '/full_ref.npy', Full_Ref_Spec)
+except:
+    print("Failed to Save!")
+np.save('/home/luke/data/Model/results/'+ dataset + '/obs.npy', Obs)
 with open('/home/luke/data/Model/results/'+ dataset + '/C.pickle', 'wb') as handle:
     pkl.dump(C, handle, protocol=pkl.HIGHEST_PROTOCOL)
 np.save('/home/luke/data/Model/results/'+ dataset + '/y_model_wv_squeezed.npy', y_model_wv_squeezed)
@@ -132,8 +117,8 @@ np.save('/home/luke/data/Model/results/'+ dataset + '/lasso_evaluation.npy', Las
 
 
 # Plot time series of concentration and emissions ratios
-PlotTimeSeries('PPM_TimeSeries', list(Compounds.keys()), x_sol, np.sqrt(sigma), obs_spec.shape[0], dataset)
-PlotER_TimeSeries('ER_TimeSeries', list(Compounds.keys()), x_sol, np.sqrt(sigma), obs_spec.shape[0], 'CO2', dataset)
+PlotTimeSeries('PPM_TimeSeries', list(Compounds.keys()), x_sol, np.sqrt(sigma), Obs.shape[0], dataset)
+PlotER_TimeSeries('ER_TimeSeries', list(Compounds.keys()), x_sol, np.sqrt(sigma), Obs.shape[0], 'CO2', dataset)
 PlotOPUS_Results('OPUS_result', dataset)
 
 PlotSpectralResiduals(Full_Ref_Spec, np.load('/home/luke/data/Model/results/'+ dataset + '/full_resid_spectra.npy'), np.load('/home/luke/data/Model/results/'+ dataset + '/W_full.npy'), x_sol, sigma, Compounds, dataset)

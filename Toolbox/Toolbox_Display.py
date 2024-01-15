@@ -2,6 +2,7 @@ import os
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.dates import DateFormatter
 
 from Toolbox.Toolbox_Inversion import *
 
@@ -39,19 +40,36 @@ def PlotTimeSeries(name: str, compound_list: list, x_sol: np.ndarray, x_err: np.
 
     fig, axs = plt.subplots(num_rows + 1, 2, figsize=(10, 6))
 
-    fig.text(0.5, 0.04, 'Time Step', ha='center')
+    fig.text(0.5, 0.04, 'Time', ha='center')
     fig.text(0.07, 0.5, 'Concentration / ppm', va='center', rotation='vertical')
 
     plt.subplots_adjust(hspace=0.5)
 
     for i, spc in enumerate(compound_list):
         row, col = divmod(i, 2)
-        axs[row, col].plot(np.arange(Nt), x_sol[i * Nt:(i + 1) * Nt], color='red')
-        axs[row, col].fill_between(np.arange(Nt), x_sol[i * Nt:(i + 1) * Nt] - 0.5 * x_err[i * Nt:(i + 1) * Nt],
-                                  x_sol[i * Nt:(i + 1) * Nt] + 0.5 * x_err[i * Nt:(i + 1) * Nt],
-                                  color="0.8")
-        axs[row, col].set_title(spc, loc='right')
+        try:
+            axs[row, col].plot(df['DateTime'], x_sol[i * Nt:(i + 1) * Nt], color='red')
+            axs[row, col].fill_between(df['DateTime'], x_sol[i * Nt:(i + 1) * Nt] - 0.5 * x_err[i * Nt:(i + 1) * Nt],
+                                    x_sol[i * Nt:(i + 1) * Nt] + 0.5 * x_err[i * Nt:(i + 1) * Nt],
+                                    color="0.8")
+        except:
+            axs[row, col].plot(np.arange(len(x_sol[i * Nt:(i + 1) * Nt])), x_sol[i * Nt:(i + 1) * Nt], color='red')
+            axs[row, col].fill_between(np.arange(len(x_sol[i * Nt:(i + 1) * Nt])), x_sol[i * Nt:(i + 1) * Nt] - 0.5 * x_err[i * Nt:(i + 1) * Nt],
+                                    x_sol[i * Nt:(i + 1) * Nt] + 0.5 * x_err[i * Nt:(i + 1) * Nt],
+                                    color="0.8")
+        axs[row, col].set_title(spc, loc='center', pad = -10)
         axs[row, col].grid()
+
+        if row != num_rows:
+            axs[row, col].set_xticklabels([])
+        else:
+            axs[row, col].tick_params(axis='x', rotation=45)
+            axs[row, col].xaxis.set_major_formatter(DateFormatter('%H:%M'))
+
+        #axs[row, col].grid(axis='y')
+
+    for i in range(len(compound_list), (num_rows + 1) * 2):
+        fig.delaxes(axs.flatten()[i])
 
     fig.subplots_adjust(top=0.95)
 
@@ -173,18 +191,21 @@ def PlotResiduals(y_model_wv_squeezed: np.ndarray, y_model_time_squeezed: np.nda
 
 def PlotER_TimeSeries(name: str, compound_list: list, x_sol: np.ndarray, x_err: np.ndarray, Nt: int, Norm_Species: str, dataset: str):
     """
-    Plot emission ratio time series for the present compounds.
+    Plot time series data for a list of compounds.
 
     Args:
         name (str): Name of the plot or figure.
         compound_list (list): List of compound names.
-        x_sol (np.ndarray): Solution data for the compounds over time.
-        x_err (np.ndarray): Error data for the compounds over time.
+        x_sol (np.ndarray): Solution for species concentrations over time.
+        x_err (np.ndarray): Standard error for the derived concentrations over time.
         Nt (int): Number of time steps.
-        Norm_Species (str): The species from which emissions are normalised.
 
+    This function generates a time series plot for the present compounds, where each compound's
+    concentration is plotted over time. The resulting plot is saved with the specified 'name'.
+    
     """
     print('Plotting ER Time Series')
+
 
     # Getting time data
     directory = "/home/luke/data/MATRIX_data/" + dataset + '/'
@@ -198,31 +219,58 @@ def PlotER_TimeSeries(name: str, compound_list: list, x_sol: np.ndarray, x_err: 
     df['DateTime'] = pd.to_datetime(df['Date'] + ' ' + df['Time'])
     ##
 
-    conc = x_sol[compound_list.index(Norm_Species)*Nt:(compound_list.index(Norm_Species)+1)*Nt]
-    se = x_err[compound_list.index(Norm_Species)*Nt:(compound_list.index(Norm_Species)+1)*Nt]
-
     num_rows = (len(compound_list)-1) // 2  # Calculate the number of rows needed
 
-    fig, axs = plt.subplots(num_rows+1, 2, figsize=(10, 6))
+    fig, axs = plt.subplots(num_rows + 1, 2, figsize=(10, 6))
 
-    fig.text(0.5, 0.04, 'Time Step', ha='center')
-    fig.text(0.07, 0.5, 'Emission Ratios / (X/' + Norm_Species + ')', va='center', rotation='vertical')
+    fig.text(0.5, 0.04, 'Time', ha='center')
+    fig.text(0.07, 0.5, 'Emission Ratio / conc(x)/conc('+Norm_Species+')', va='center', rotation='vertical')
+
+    plt.subplots_adjust(hspace=0.5)
+
+    conc_Norm = x_sol[compound_list.index(Norm_Species)*Nt:(compound_list.index(Norm_Species)+1)*Nt]
+    se_Norm = x_err[compound_list.index(Norm_Species)*Nt:(compound_list.index(Norm_Species)+1)*Nt]
 
     for i, spc in enumerate(compound_list):
-        if spc == 'CO2':
-            continue
 
-        ER = x_sol[i*Nt:(i+1)*Nt] / conc
-        ER_se = [ER[a]*np.sqrt((se[a]/conc[a])**2 + (x_err[i*Nt:(i+1)*Nt][a]/x_sol[i*Nt:(i+1)*Nt][a])**2) for a in range (len(ER))]
+        if spc == Norm_Species:
+            fig.delaxes(axs.flatten()[i])
+            continue
+        # elif spc == 'CO2':
+        #     x_sol[i * Nt:(i + 1) * Nt] *= 20
+        # elif spc =='CO':
+        #     x_sol[i * Nt:(i + 1) * Nt] *= 4
+
+        er = np.divide(x_sol[i * Nt:(i + 1) * Nt],conc_Norm)
+
+        # Compute the standard error of the result
+        se_result = np.sqrt(np.divide(x_err[i * Nt:(i + 1) * Nt], x_sol[i * Nt:(i + 1) * Nt])**2 + (np.divide(se_Norm, conc_Norm))**2)
+
 
         row, col = divmod(i, 2)
-        axs[row,col].plot(np.arange(Nt), ER, color = 'red')
-        #Should fix uncertainty calculations (too big atm- mistake in calc.)
-        # axs[row,col].fill_between(np.arange(Nt), np.array(ER) - 0.5*np.array(ER_se),
-        #                          np.array(ER) + 0.5*np.array(ER_se),
-        #                          color= "0.8")
-        # axs[row, col].set_title(spc, loc='right')
+        try:
+            axs[row, col].plot(df['DateTime'], er, color='red')
+        except:
+            axs[row, col].plot(np.arange(len(er)), er, color='red')
+        # axs[row, col].fill_between(df['DateTime'], er - 0.5 * se_result,
+        #                           er + 0.5 * se_result,
+        #                           color="0.8")
+        axs[row, col].set_title(spc, loc='center', pad = -10)
         axs[row, col].grid()
+
+        if row != num_rows:
+            axs[row, col].set_xticklabels([])
+            #axs[row, col].grid(axis='x')
+        else:
+            axs[row, col].tick_params(axis='x', rotation=20)
+            axs[row, col].xaxis.set_major_formatter(DateFormatter('%H:%M'))
+
+        #axs[row, col].grid(axis='y')
+
+    for i in range(len(compound_list), (num_rows + 1) * 2):
+        fig.delaxes(axs.flatten()[i])
+
+    fig.subplots_adjust(top=0.95)
 
     plt.savefig('/home/luke/data/Model/plots/'+ dataset + '/' + name + '.png')
 
