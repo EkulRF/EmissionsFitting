@@ -133,9 +133,10 @@ def generateData(Compounds: dict, path: str, sigma: float, T: float, P: float, d
     deselect = np.full(len(W), True)
 
     for i in range(len(residual_spectra)):
-        arr = [index for (index, item) in enumerate(residual_spectra[i]) if np.isnan(item)]
-        for i in arr:
-            deselect[i] = False
+        plt.figure()
+        plt.plot(W, residual_spectra[i])
+        plt.savefig('/home/luke/data/Model/plots/'+dataset+'/absorbance_plots/'+str(i))
+        plt.show()
 
     return reference_spectra, residual_spectra, full_storage_mtx, Compounds
 
@@ -159,6 +160,7 @@ def makeDirs(dataset: str):
     os.makedirs('/home/luke/data/Model/plots/'+dataset+'/', exist_ok=True)
     os.makedirs('/home/luke/data/Model/plots/'+dataset+'/Residuals/', exist_ok=True)
     os.makedirs('/home/luke/data/Model/plots/'+dataset+'/spectra_plots/', exist_ok=True)
+    os.makedirs('/home/luke/data/Model/plots/'+dataset+'/absorbance_plots/', exist_ok=True)
     os.makedirs('/home/luke/data/Model/results/'+dataset+'/', exist_ok=True)
 
     return

@@ -7,21 +7,20 @@ from Toolbox.Toolbox_Display import *
 
 # Define the path to the spectra data
 base_path = "/home/luke/data/MATRIX_data/"
-dataset = "Peat9"
+dataset = "Peat6"
 
 makeDirs(dataset)
 
 P, T = getPT(dataset)
 print(f"Pressure: {P}, Temperature: {T}")
-P *= 10
-T = 250
-T, P = 693, 0.101325
+P *= 20
+T = 900
+
 
 # Load chemical compound information from a pickle file
 Compounds = getCompounds('/home/luke/lukeflamingradis/EmFit_private/EmissionsSpeciesInfo.pickle')
 
-#Compounds['CO2']['bounds'] = [Compounds['CO2']['bounds'][0]]
-Compounds['CO']['bounds'] = [Compounds['CO']['bounds'][0]]
+Compounds['SO2']['bounds'] = [[1200,1600]]
 
 # List of compounds to be removed from the Compounds dictionary
 remove = ['SiH', 'CaF', 'SiS', 'BeH', 'HF', 'NH', 'SiH2', 'AlF', 'SH', 'CH', 'AlH', 'TiH', 'CaH', 'LiF', 'MgH', 'ClO']

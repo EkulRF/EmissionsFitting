@@ -74,7 +74,7 @@ def temporally_regularised_inversion(
     plt.yticks(ticks, compound_list)
 
     cbar = plt.colorbar()
-    cbar.set_label('$\\text{sgn}(\\rho)\\log_{10}(|\\rho|)$')
+    cbar.set_label('$\\text{sgn}(\\rho)\cdot\\log_{10}(|\\rho|)$')
 
     plt.tight_layout()
 

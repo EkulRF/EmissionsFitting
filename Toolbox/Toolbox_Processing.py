@@ -56,7 +56,7 @@ def build_A_matrix(spectra, Ns, Nl, Nt):
     return sp.hstack(S)  # (Nl*Nt, Ns*Nt) matrix
 
 
-def remove_background(S: np.ndarray, W: np.ndarray) -> np.ndarray:
+def remove_background_old(S: np.ndarray, W: np.ndarray) -> np.ndarray:
     """
     Remove the background from the input spectra.
 
@@ -77,19 +77,64 @@ def remove_background(S: np.ndarray, W: np.ndarray) -> np.ndarray:
 
     # Calculate the baseline using the ALS algorithm (Old method)
     sb = Spectrum.get_baseline(spectrum, algorithm='als')
-    w, A = sb.get('transmittance', wunit='cm-1')
+    w, T = sb.get('transmittance', wunit='cm-1')
 
     # Calculate the baseline of the first spectrum in 'S'
-    w, A = spectrum.get('transmittance', wunit='cm-1')
-    base_abs = -np.log(A)
+    w, T = spectrum.get('transmittance', wunit='cm-1')
+
+    T += np.min(S.flatten()) + 1e-6
+    T /= np.max(S.flatten()) + 0.1
+
+    base_abs = -np.log(T)
 
     absorbance_spectra = []
 
     # Process each spectrum in 'S'
     for s in S:
+        s += abs(np.min(S.flatten())) + 1e-6
+        s /= np.max(S.flatten()) + 0.1
         a = -np.log(s)
         rb = a - base_abs
         rb[np.isnan(rb)] = 0
+        absorbance_spectra.append(rb)
+
+    return np.array(absorbance_spectra)
+
+def remove_background(S: np.ndarray, W: np.ndarray) -> np.ndarray:
+    """
+    Remove the background from the input spectra.
+
+    Args:
+        S (np.ndarray): An array of spectra where each row represents a spectrum.
+        W (np.ndarray): The corresponding wavenumber array.
+
+    Returns:
+        np.ndarray: An array of absorbance spectra with the background removed.
+
+    The function removes the background from the input spectra by subtracting the
+    baseline absorbance spectrum obtained using the asymmetric least squares (ALS)
+    algorithm. The baseline spectrum is calculated from the first spectrum in 'S'.
+
+    """
+    # Create a Spectrum object from the input data
+    #spectrum = Spectrum.from_array(np.array(W), np.array(S[0]), 'transmittance', wunit='cm-1', unit='')
+
+    T = np.array(S[0])
+
+    # Calculate the baseline of the first spectrum in 'S'
+    #w, T = spectrum.get('transmittance', wunit='cm-1')
+    T += abs(np.min(S.flatten())) + 1e-6
+    T /= np.max(S.flatten()) + 0.1
+    base_abs = -np.log(T)
+
+    absorbance_spectra = []
+
+    # Process each spectrum in 'S'
+    for s in S:
+        s += abs(np.min(S.flatten())) + 1e-6
+        s /= np.max(S.flatten()) + 0.1
+        a = -np.log(s)
+        rb = abs(a - base_abs)
         absorbance_spectra.append(rb)
 
     return np.array(absorbance_spectra)
@@ -124,6 +169,8 @@ def getReferenceMatrix(Compounds: dict, T: float, P: float, W_obs: np.ndarray, s
         bank = Compounds[c]['Source']
         tmp = np.zeros_like(W_obs)
 
+        print(c, Compounds[c]['bounds'])
+
         for i in range(len(Compounds[c]['bounds'])):
             bound = Compounds[c]['bounds'][i]
             try:
@@ -150,26 +197,8 @@ def getReferenceMatrix(Compounds: dict, T: float, P: float, W_obs: np.ndarray, s
 
             w, A = s.get('absorbance', wunit='cm-1')
 
-            if sigma != 0:
-
-                # A = np.nan_to_num(A, nan=0)
-                # broadened_A = convolve_with_peaks(w, A, sigma)
-                # broadened_A = np.nan_to_num(broadened_A, nan=0)
-                # # broadened_A = convolve(
-                # #     A, norm_constant * np.exp(-(w - np.median(w))**2 / (2 * sigma**2)), mode='same')
-                # #broadened_A *= np.max(A) / np.max(broadened_A)
-                # tmp[iloc:jloc] = broadened_A
-                # plt.plot(w, broadened_A)
-
-                selected_centre = weighted_average_center(w,A)
-                broadening_function = gaussian_broadening(w, x0=selected_centre, sigma=sigma)
-                broadened_A = broaden_spectrum(w, A, broadening_function)
-                tmp[iloc:jloc] = broadened_A
-                plt.plot(w, broadened_A)
-
-            else:
-                tmp[iloc:jloc] = A
-                plt.plot(w, A)
+            tmp[iloc:jloc] = A
+            plt.plot(w, A)
 
         output.append(tmp)
 

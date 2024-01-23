@@ -296,7 +296,7 @@ def PlotSpectralResiduals(full_ref_spec, full_obs_spec, W_full, x_sol, sigma, Co
 
         fig.suptitle(key, x=0.05, y=0.95, ha='left', fontsize=16)  # Add figure text at the top left
         fig.text(0.02, 0.5, 'Absorbance', va='center', ha='left', rotation='vertical', fontsize=14)
-        fig.text(0.695, 0.5, 'Observed - Modelled Spectra', va='center', ha='left', rotation='vertical', fontsize=14)
+        fig.text(0.695, 0.5, 'Prediction Residuals', va='center', ha='left', rotation='vertical', fontsize=14)
 
         for i, bound in enumerate(Compounds[key]['bounds']):
             
@@ -308,9 +308,9 @@ def PlotSpectralResiduals(full_ref_spec, full_obs_spec, W_full, x_sol, sigma, Co
                 min_points.append(np.min(y_model_sel[np.where((W_full >= b[0]) & (W_full <= b[1]))]))
 
             # Plot on the left side
-            axs[i][0].plot(W_full, y_sel, color='red', linewidth=4, label='Observed Spectra')
-            axs[i][0].plot(W_full, y_model_sel, '-.', color='k', label='Modelled Spectra')
-            axs[i][0].fill_between(W_full, y_model_sel - y_model_err_sel, y_model_sel + y_model_err_sel, color='gray', alpha=0.5)
+            axs[i][0].plot(W_full, y_sel, color='red', linewidth=4, label='Observed Spectrum')
+            axs[i][0].plot(W_full, y_model_sel, '-.', color='k', label='Modelled Spectrum')
+            axs[i][0].fill_between(W_full, y_model_sel - y_model_err_sel, y_model_sel + y_model_err_sel, color='gray', alpha=0.35)
             axs[i][0].set_xlim(bound[0], bound[1])
             axs[i][0].set_ylim(np.min(min_points)-0.01, np.max(max_points)+0.01)
             axs[i][0].tick_params(axis='both', labelsize=12)
@@ -320,7 +320,7 @@ def PlotSpectralResiduals(full_ref_spec, full_obs_spec, W_full, x_sol, sigma, Co
 
             # Plot histogram on the right side
             diff = y_sel[np.where((W_full >= bound[0]) & (W_full <= bound[1]))] - y_model_sel[np.where((W_full >= bound[0]) & (W_full <= bound[1]))]
-            axs[i][1].hist(diff, bins=20,  alpha=0.7, color='#3498db', edgecolor='black', orientation='horizontal')
+            axs[i][1].hist(diff, bins=20,  alpha=0.7, color='#9034db', edgecolor='black', orientation='horizontal')
             axs[i][1].axhline(y=0, color='black', linestyle='-', linewidth=1)
             axs[i][1].grid(axis='x', linestyle='--', alpha=0.7)
             axs[i][1].tick_params(axis='both', labelsize=12)
@@ -335,6 +335,7 @@ def PlotSpectralResiduals(full_ref_spec, full_obs_spec, W_full, x_sol, sigma, Co
 
         # Show the plot
         plt.savefig('/home/luke/data/Model/plots/'+ dataset + '/Residuals/' + key + '.png')
+        plt.savefig('/home/luke/data/Model/plots/'+ dataset + '/Residuals/' + key + '.pdf')
         plt.show()
 
     return
